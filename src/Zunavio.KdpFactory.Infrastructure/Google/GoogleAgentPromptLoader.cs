@@ -115,7 +115,7 @@ public sealed class GoogleAgentPromptLoader : IAgentPromptLoader
 
         // Prefer the exact naming convention of the factory prompt documents,
         // then fall back to code/name matching for backward compatibility.
-        var expectedToken = $"AGENT_{AgentNumber(definition.Code)}_{definition.Code}";
+        var expectedToken = OfficialPromptPrefix(definition.Code);
 
         var match = (result.Files ?? [])
             .FirstOrDefault(file =>
@@ -205,20 +205,20 @@ public sealed class GoogleAgentPromptLoader : IAgentPromptLoader
         DriveFileId = definition.PromptDriveFileId ?? string.Empty,
     };
 
-    private static string AgentNumber(string code) =>
-        code.ToUpperInvariant() switch
+    private static string OfficialPromptPrefix(string code) =>
+        code.Trim().ToUpperInvariant() switch
         {
-            "ORCHESTRATOR" => "00",
-            "SCOUT" => "01",
-            "VALIDATOR" => "02",
-            "ARCHITECT" => "03",
-            "WRITER" => "04",
-            "ARTDIRECTOR" => "05",
-            "ART_DIRECTOR" => "05",
-            "PRODUCTION" => "06",
-            "METADATA" => "07",
-            "QA" => "08",
-            "LAUNCH" => "09",
+            "ORCHESTRATOR" => "AGENT_00_ORCHESTRATOR",
+            "SCOUT" => "AGENT_01_SCOUT",
+            "VALIDATOR" => "AGENT_02_VALIDATOR",
+            "ARCHITECT" => "AGENT_03_ARCHITECT",
+            "WRITER" => "AGENT_04_WRITER",
+            "ARTDIRECTOR" => "AGENT_05_ART_DIRECTOR",
+            "ART_DIRECTOR" => "AGENT_05_ART_DIRECTOR",
+            "PRODUCTION" => "AGENT_06_PRODUCTION",
+            "METADATA" => "AGENT_07_METADATA",
+            "QA" => "AGENT_08_QA",
+            "LAUNCH" => "AGENT_09_LAUNCH",
             _ => string.Empty,
         };
 
