@@ -12,28 +12,26 @@ namespace Zunavio.KdpFactory.Infrastructure.Seeding;
 public sealed record AgentSeedResult(int Created, int Updated);
 
 /// <summary>
-/// Idempotently seeds the agent catalog (section 10) and, when Google Drive is
-/// configured, writes each agent's prompt as a Google Doc in the prompts folder
-/// and records its Drive file id on the definition.
+/// Idempotently seeds the agent catalog and, when Google Drive is configured,
+/// discovers the authoritative AGENT_00...AGENT_09 prompt documents that
+/// already exist in GOOGLE_PROMPTS_FOLDER_ID. It never creates replacement
+/// prompt documents from cached/default text.
 /// </summary>
 public sealed class AgentDefinitionSeeder : IGoogleDriveAgentDefinitionSeeder
 {
     private readonly KdpDbContext _db;
     private readonly IGoogleCredentialProvider _credentials;
-    private readonly IArtifactStorage _storage;
     private readonly GoogleOptions _options;
     private readonly ILogger<AgentDefinitionSeeder> _logger;
 
     public AgentDefinitionSeeder(
         KdpDbContext db,
         IGoogleCredentialProvider credentials,
-        IArtifactStorage storage,
         IOptions<GoogleOptions> options,
         ILogger<AgentDefinitionSeeder> logger)
     {
         _db = db;
         _credentials = credentials;
-        _storage = storage;
         _options = options.Value;
         _logger = logger;
     }
@@ -51,7 +49,9 @@ public sealed class AgentDefinitionSeeder : IGoogleDriveAgentDefinitionSeeder
 
         foreach (var definition in AgentDefinitionSeedData.All)
         {
-            var existing = await _db.AgentDefinitions.FirstOrDefaultAsync(a => a.Code == definition.Code, ct);
+            var existing = await _db.AgentDefinitions
+                .FirstOrDefaultAsync(a => a.Code == definition.Code, ct);
+
             if (existing is null)
             {
                 _db.AgentDefinitions.Add(definition);
@@ -62,6 +62,7 @@ public sealed class AgentDefinitionSeeder : IGoogleDriveAgentDefinitionSeeder
                 existing.Name = definition.Name;
                 existing.Description = definition.Description;
                 existing.Enabled = definition.Enabled;
+
                 if (string.IsNullOrWhiteSpace(existing.PromptTextCache))
                 {
                     existing.PromptTextCache = definition.PromptTextCache;
@@ -75,52 +76,81 @@ public sealed class AgentDefinitionSeeder : IGoogleDriveAgentDefinitionSeeder
 
         if (_options.IsConfigured && !string.IsNullOrWhiteSpace(_options.PromptsFolderId))
         {
-            foreach (var definition in await _db.AgentDefinitions.ToListAsync(ct))
-            {
-                await SeedPromptDocumentAsync(definition, ct);
-            }
-
+            await DiscoverOfficialPromptDocumentsAsync(ct);
             await _db.SaveChangesAsync(ct);
         }
 
-        _logger.LogInformation("Agent definitions seeded: {Created} created, {Updated} updated.", created, updated);
+        _logger.LogInformation(
+            "Agent definitions seeded: {Created} created, {Updated} updated.",
+            created,
+            updated);
+
         return new AgentSeedResult(created, updated);
     }
 
-    private async Task SeedPromptDocumentAsync(AgentDefinition definition, CancellationToken ct)
+    private async Task DiscoverOfficialPromptDocumentsAsync(CancellationToken ct)
     {
-        if (!string.IsNullOrWhiteSpace(definition.PromptDriveFileId))
-        {
-            return;
-        }
-
-        var docName = $"ZUNAVIO_AGENT_{definition.Code}_PROMPT";
-
         var request = _credentials.Drive.Files.List();
-        request.Q = $"'{Escape(_options.PromptsFolderId!)}' in parents and trashed=false and name='{Escape(docName)}'";
-        request.PageSize = 1;
+        request.Q =
+            $"'{Escape(_options.PromptsFolderId!)}' in parents and trashed=false and mimeType='application/vnd.google-apps.document'";
+        request.PageSize = 100;
         request.Fields = "files(id,name)";
         var result = await request.ExecuteAsync(ct);
+        var files = result.Files ?? [];
 
-        if (result.Files is { Count: > 0 } && result.Files[0].Id is { } id)
+        foreach (var definition in await _db.AgentDefinitions.ToListAsync(ct))
         {
-            definition.PromptDriveFileId = id;
-            definition.PromptDriveUrl = $"https://docs.google.com/document/d/{id}/edit";
-            return;
-        }
+            var expectedPrefix = OfficialPromptPrefix(definition.Code);
+            if (string.IsNullOrWhiteSpace(expectedPrefix))
+            {
+                _logger.LogWarning(
+                    "No official prompt naming rule is defined for agent {Code}.",
+                    definition.Code);
+                continue;
+            }
 
-        if (string.IsNullOrWhiteSpace(definition.PromptTextCache))
-        {
-            _logger.LogWarning("No prompt content to seed for agent {Code}.", definition.Code);
-            return;
-        }
+            var match = files.FirstOrDefault(file =>
+                !string.IsNullOrWhiteSpace(file.Name)
+                && file.Name.StartsWith(expectedPrefix, StringComparison.OrdinalIgnoreCase));
 
-        var doc = await _storage.CreateDocumentAsync(
-            _options.PromptsFolderId!, docName, definition.PromptTextCache, ct);
-        definition.PromptDriveFileId = doc.FileId;
-        definition.PromptDriveUrl = doc.Url;
-        _logger.LogInformation("Created prompt document for agent {Code}: {Url}", definition.Code, doc.Url);
+            if (match?.Id is null)
+            {
+                _logger.LogWarning(
+                    "Official prompt '{ExpectedPrefix}...' was not found in GOOGLE_PROMPTS_FOLDER_ID for agent {Code}. No replacement document was created.",
+                    expectedPrefix,
+                    definition.Code);
+                continue;
+            }
+
+            definition.PromptDriveFileId = match.Id;
+            definition.PromptDriveUrl =
+                $"https://docs.google.com/document/d/{match.Id}/edit";
+
+            _logger.LogInformation(
+                "Linked agent {Code} to official prompt '{PromptName}' ({PromptId}).",
+                definition.Code,
+                match.Name,
+                match.Id);
+        }
     }
 
-    private static string Escape(string value) => value.Replace("\\", "\\\\").Replace("'", "\\'");
+    internal static string OfficialPromptPrefix(string code) =>
+        code.Trim().ToUpperInvariant() switch
+        {
+            "ORCHESTRATOR" => "AGENT_00_ORCHESTRATOR",
+            "SCOUT" => "AGENT_01_SCOUT",
+            "VALIDATOR" => "AGENT_02_VALIDATOR",
+            "ARCHITECT" => "AGENT_03_ARCHITECT",
+            "WRITER" => "AGENT_04_WRITER",
+            "ARTDIRECTOR" => "AGENT_05_ART_DIRECTOR",
+            "ART_DIRECTOR" => "AGENT_05_ART_DIRECTOR",
+            "PRODUCTION" => "AGENT_06_PRODUCTION",
+            "METADATA" => "AGENT_07_METADATA",
+            "QA" => "AGENT_08_QA",
+            "LAUNCH" => "AGENT_09_LAUNCH",
+            _ => string.Empty,
+        };
+
+    private static string Escape(string value) =>
+        value.Replace("\\", "\\\\").Replace("'", "\\'");
 }

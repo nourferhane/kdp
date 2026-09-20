@@ -10,9 +10,9 @@ using Zunavio.KdpFactory.Infrastructure.Configuration;
 namespace Zunavio.KdpFactory.Infrastructure.Google;
 
 /// <summary>
-/// Loads the authoritative prompt from a Google Doc and caches a snapshot in
-/// the AgentDefinition table. Drive is the authoring source; fetching is
-/// resilient: when Drive fails or is not configured, the cached copy is used.
+/// Loads the authoritative prompt from Google Drive and records an immutable
+/// snapshot on every run. When Google is configured, Drive is mandatory:
+/// cached prompt text is never used as a silent fallback.
 /// </summary>
 public sealed class GoogleAgentPromptLoader : IAgentPromptLoader
 {
@@ -36,112 +36,130 @@ public sealed class GoogleAgentPromptLoader : IAgentPromptLoader
         _logger = logger;
     }
 
-    public async Task<PromptSnapshot> LoadAsync(AgentDefinition definition, CancellationToken ct)
+    public async Task<PromptSnapshot> LoadAsync(
+        AgentDefinition definition,
+        CancellationToken ct)
     {
-        var promptFileId = await ResolvePromptFileIdAsync(definition);
-        if (promptFileId is not null && _options.IsConfigured)
+        // Strict production path: if Google is configured, every agent run must
+        // resolve and read the current Google Doc. Any Drive failure blocks the
+        // run rather than silently executing an old cached prompt.
+        if (_options.IsConfigured)
         {
-            try
+            var promptFileId = await ResolvePromptFileIdAsync(definition, ct);
+            if (string.IsNullOrWhiteSpace(promptFileId))
             {
-                return await FetchAndCacheAsync(definition, promptFileId, ct);
+                throw new InvalidOperationException(
+                    $"No Google Drive prompt document could be resolved for agent '{definition.Code}'.");
             }
-            catch (Exception ex) when (HasCachedPrompt(definition))
-            {
-                _logger.LogWarning(ex,
-                    "Could not load prompt for agent {Code} from Drive; using cached copy (v{Version}).",
-                    definition.Code, definition.PromptVersion);
-            }
-        }
-        else if (promptFileId is not null && !_options.IsConfigured)
-        {
-            _logger.LogInformation(
-                "Drive not configured; using cached prompt for agent {Code} (v{Version}).",
-                definition.Code, definition.PromptVersion);
+
+            return await FetchAndCacheAsync(definition, promptFileId, ct);
         }
 
+        // Local/offline development may use a previously cached immutable
+        // snapshot, but this path is never used when Drive is enabled.
         if (HasCachedPrompt(definition))
         {
+            _logger.LogInformation(
+                "Google Drive is not configured; using cached prompt for agent {Code} (v{Version}).",
+                definition.Code,
+                definition.PromptVersion);
+
             return NewSnapshot(definition);
         }
 
-        throw new InvalidOperationException(
-            $"No prompt available for agent '{definition.Code}'. Configure Google and seed prompt doc IDs, " +
-            "or provide a cached PromptTextCache first.");
+        throw new GoogleNotConfiguredException(
+            $"No prompt is available for agent '{definition.Code}'. Configure Google Drive or seed a cached prompt for offline development.");
     }
 
-    public async Task<PromptSnapshot> RefreshAsync(AgentDefinition definition, CancellationToken ct)
+    public async Task<PromptSnapshot> RefreshAsync(
+        AgentDefinition definition,
+        CancellationToken ct)
     {
-        var promptFileId = await ResolvePromptFileIdAsync(definition);
-        if (promptFileId is null)
-        {
-            if (HasCachedPrompt(definition))
-            {
-                return NewSnapshot(definition);
-            }
-
-            throw new InvalidOperationException($"No prompt Drive file id is recorded for agent '{definition.Code}'.");
-        }
-
         if (!_options.IsConfigured)
         {
             throw new GoogleNotConfiguredException(
                 "Drive is not configured; cannot refresh prompts. Add a service account credential.");
         }
 
+        var promptFileId = await ResolvePromptFileIdAsync(definition, ct);
+        if (string.IsNullOrWhiteSpace(promptFileId))
+        {
+            throw new InvalidOperationException(
+                $"No Google Drive prompt document could be resolved for agent '{definition.Code}'.");
+        }
+
         return await FetchAndCacheAsync(definition, promptFileId, ct);
     }
 
-    private async Task<string?> ResolvePromptFileIdAsync(AgentDefinition definition)
+    private async Task<string?> ResolvePromptFileIdAsync(
+        AgentDefinition definition,
+        CancellationToken ct)
     {
         if (!string.IsNullOrWhiteSpace(definition.PromptDriveFileId))
         {
             return definition.PromptDriveFileId;
         }
 
-        // Discover by name in the prompts folder (e.g. the repo document).
-        if (_options.IsConfigured && !string.IsNullOrWhiteSpace(_options.PromptsFolderId))
+        if (string.IsNullOrWhiteSpace(_options.PromptsFolderId))
         {
-            var drive = _credentials.Drive;
-            var request = drive.Files.List();
-            request.Q = $"'{Escape(_options.PromptsFolderId)}' in parents and trashed=false and mimeType='application/vnd.google-apps.document'";
-            request.PageSize = 100;
-            request.Fields = "files(id,name)";
-            var result = await request.ExecuteAsync(CancellationToken.None);
-
-            foreach (var file in result.Files ?? [])
-            {
-                var name = file.Name ?? string.Empty;
-                if (name.Contains(definition.Code, StringComparison.OrdinalIgnoreCase)
-                    || name.Contains(definition.Name, StringComparison.OrdinalIgnoreCase))
-                {
-                    definition.PromptDriveFileId = file.Id;
-                    definition.PromptDriveUrl = $"https://docs.google.com/document/d/{file.Id}/edit";
-                    return file.Id;
-                }
-            }
+            throw new InvalidOperationException(
+                $"GOOGLE_PROMPTS_FOLDER_ID is required to discover the prompt for agent '{definition.Code}'.");
         }
 
-        return null;
+        var request = _credentials.Drive.Files.List();
+        request.Q =
+            $"'{Escape(_options.PromptsFolderId)}' in parents and trashed=false and mimeType='application/vnd.google-apps.document'";
+        request.PageSize = 100;
+        request.Fields = "files(id,name)";
+        var result = await request.ExecuteAsync(ct);
+
+        // Prefer the exact naming convention of the factory prompt documents,
+        // then fall back to code/name matching for backward compatibility.
+        var expectedToken = OfficialPromptPrefix(definition.Code);
+
+        var match = (result.Files ?? [])
+            .FirstOrDefault(file =>
+                (file.Name ?? string.Empty).Contains(
+                    expectedToken,
+                    StringComparison.OrdinalIgnoreCase))
+            ?? (result.Files ?? [])
+                .FirstOrDefault(file =>
+                {
+                    var name = file.Name ?? string.Empty;
+                    return name.Contains(definition.Code, StringComparison.OrdinalIgnoreCase)
+                        || name.Contains(definition.Name, StringComparison.OrdinalIgnoreCase);
+                });
+
+        if (match is null)
+        {
+            return null;
+        }
+
+        definition.PromptDriveFileId = match.Id;
+        definition.PromptDriveUrl =
+            $"https://docs.google.com/document/d/{match.Id}/edit";
+
+        await _db.SaveChangesAsync(ct);
+
+        return match.Id;
     }
 
-    private async Task<PromptSnapshot> FetchAndCacheAsync(AgentDefinition definition, string fileId, CancellationToken ct)
+    private async Task<PromptSnapshot> FetchAndCacheAsync(
+        AgentDefinition definition,
+        string fileId,
+        CancellationToken ct)
     {
-        var drive = _credentials.Drive;
-        var request = drive.Files.Get(fileId);
+        var request = _credentials.Drive.Files.Get(fileId);
         request.Fields = "id,name,modifiedTime";
         var meta = await request.ExecuteAsync(ct);
 
         var read = await _storage.ReadDocumentAsync(fileId, ct);
         var text = read.Content;
+
         if (string.IsNullOrWhiteSpace(text))
         {
-            if (HasCachedPrompt(definition))
-            {
-                _logger.LogWarning("Prompt document {FileId} for agent {Code} is empty; using cached copy.", fileId, definition.Code);
-                return NewSnapshot(definition);
-            }
-
-            throw new InvalidOperationException($"Prompt document for agent '{definition.Code}' is empty.");
+            throw new InvalidOperationException(
+                $"Prompt document '{meta.Name ?? fileId}' for agent '{definition.Code}' is empty.");
         }
 
         var hash = Hash(text);
@@ -150,7 +168,8 @@ public sealed class GoogleAgentPromptLoader : IAgentPromptLoader
             : $"v{hash[..6]}";
 
         definition.PromptDriveFileId = fileId;
-        definition.PromptDriveUrl ??= $"https://docs.google.com/document/d/{fileId}/edit";
+        definition.PromptDriveUrl =
+            $"https://docs.google.com/document/d/{fileId}/edit";
         definition.PromptVersion = version;
         definition.PromptHash = hash;
         definition.PromptTextCache = text;
@@ -158,8 +177,12 @@ public sealed class GoogleAgentPromptLoader : IAgentPromptLoader
 
         await _db.SaveChangesAsync(ct);
 
-        _logger.LogInformation("Cached prompt for agent {Code} (v{Version}, {Bytes} bytes).",
-            definition.Code, version, Encoding.UTF8.GetByteCount(text));
+        _logger.LogInformation(
+            "Loaded authoritative Drive prompt for agent {Code} (v{Version}, {Bytes} bytes, {FileId}).",
+            definition.Code,
+            version,
+            Encoding.UTF8.GetByteCount(text),
+            fileId);
 
         return new PromptSnapshot
         {
@@ -182,8 +205,26 @@ public sealed class GoogleAgentPromptLoader : IAgentPromptLoader
         DriveFileId = definition.PromptDriveFileId ?? string.Empty,
     };
 
+    private static string OfficialPromptPrefix(string code) =>
+        code.Trim().ToUpperInvariant() switch
+        {
+            "ORCHESTRATOR" => "AGENT_00_ORCHESTRATOR",
+            "SCOUT" => "AGENT_01_SCOUT",
+            "VALIDATOR" => "AGENT_02_VALIDATOR",
+            "ARCHITECT" => "AGENT_03_ARCHITECT",
+            "WRITER" => "AGENT_04_WRITER",
+            "ARTDIRECTOR" => "AGENT_05_ART_DIRECTOR",
+            "ART_DIRECTOR" => "AGENT_05_ART_DIRECTOR",
+            "PRODUCTION" => "AGENT_06_PRODUCTION",
+            "METADATA" => "AGENT_07_METADATA",
+            "QA" => "AGENT_08_QA",
+            "LAUNCH" => "AGENT_09_LAUNCH",
+            _ => string.Empty,
+        };
+
     private static string Hash(string text) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
 
-    private static string Escape(string value) => value.Replace("\\", "\\\\").Replace("'", "\\'");
+    private static string Escape(string value) =>
+        value.Replace("\\", "\\\\").Replace("'", "\\'");
 }
