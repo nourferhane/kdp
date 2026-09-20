@@ -26,9 +26,12 @@ jobs:
       - name: Test
         run: dotnet test Zunavio.KdpFactory.sln --configuration Release --no-build
 
+      - name: Docker build
+        run: docker build -f src/Zunavio.KdpFactory.Web/Dockerfile .
+
       - name: Secret scan (light)
         run: |
-          if git grep -nE "sk-[A-Za-z0-9]{16,}|AIza[0-9A-Za-z_-]{30,}|@Thewitcher" -- ':!*.md' ':!*.cs' ':!appsettings*.json'; then
+          if git grep -nE "sk-[A-Za-z0-9]{16,}|AIza[0-9A-Za-z_-]{30,}|@Thewitcher" --             ':!*.md'             ':!*.cs'             ':!appsettings*.json'             ':!.github/workflows/ci.yml'; then
             echo "Possible leaked secret pattern found"; exit 1
           fi
         shell: bash
