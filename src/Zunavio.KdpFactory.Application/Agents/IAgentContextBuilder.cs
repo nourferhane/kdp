@@ -94,12 +94,16 @@ public sealed class AgentContextBuilder : IAgentContextBuilder
 
             var content = latest.ContentJson ?? string.Empty;
 
-            // When Google is configured and the approved asset has a Drive
-            // document, Drive is the authoritative source. A failure here is
-            // intentionally fatal: silently using a stale PostgreSQL copy would
-            // violate the strict agent execution contract.
-            if (_settings.GoogleEnabled && !string.IsNullOrWhiteSpace(latest.DriveFileId))
+            // A Drive-backed approved asset must always be re-read from Drive.
+            // We never silently substitute the PostgreSQL snapshot.
+            if (!string.IsNullOrWhiteSpace(latest.DriveFileId))
             {
+                if (!_settings.GoogleEnabled)
+                {
+                    throw new InvalidOperationException(
+                        $"Approved asset '{latest.AssetCode}' is Drive-backed but Google integration is disabled.");
+                }
+
                 var document = await _artifacts.ReadDocumentAsync(latest.DriveFileId, ct);
                 if (string.IsNullOrWhiteSpace(document.Content))
                 {
@@ -108,6 +112,11 @@ public sealed class AgentContextBuilder : IAgentContextBuilder
                 }
 
                 content = document.Content;
+            }
+            else if (_settings.GoogleEnabled)
+            {
+                throw new InvalidOperationException(
+                    $"Approved asset '{latest.AssetCode}' has no Google Drive file id while strict Google mode is enabled.");
             }
 
             if (string.IsNullOrWhiteSpace(content))
