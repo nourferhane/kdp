@@ -9,9 +9,15 @@ public static class KdpSettings
     public const string DbUrlEnvKey = "DATABASE_URL";
     public const string DefaultConnectionKey = "ConnectionStrings:DefaultConnection";
 
+    public const string AiProviderEnvKey = "AI_PROVIDER";
+
     public const string OpenAiApiKeyEnvKey = "OPENAI_API_KEY";
     public const string OpenAiModelEnvKey = "OPENAI_MODEL";
     public const string OpenAiBaseEnvKey = "OPENAI_BASE_URL";
+
+    public const string GeminiApiKeyEnvKey = "GEMINI_API_KEY";
+    public const string GeminiModelEnvKey = "GEMINI_MODEL";
+    public const string GeminiBaseEnvKey = "GEMINI_BASE_URL";
 
     public const string GoogleServiceAccountJsonEnvKey = "GOOGLE_SERVICE_ACCOUNT_JSON";
     public const string GoogleApplicationCredentialsEnvKey = "GOOGLE_APPLICATION_CREDENTIALS";
@@ -29,11 +35,28 @@ public static class KdpSettings
     public const string SeedDemoProjectEnvKey = "SEED_DEMO_PROJECT";
 }
 
+public sealed class AiProviderOptions
+{
+    public string Provider { get; set; } = "OpenAI";
+}
+
 public sealed class OpenAiOptions
 {
     public string ApiKey { get; set; } = string.Empty;
     public string Model { get; set; } = "gpt-4o-mini";
     public string? BaseUrl { get; set; }
+    public double? PricePerMillionInput { get; set; }
+    public double? PricePerMillionOutput { get; set; }
+    public int TimeoutSeconds { get; set; } = 300;
+    public int MaxRetries { get; set; } = 3;
+    public bool Enabled { get; set; }
+}
+
+public sealed class GeminiOptions
+{
+    public string ApiKey { get; set; } = string.Empty;
+    public string Model { get; set; } = "gemini-3.8-flash";
+    public string BaseUrl { get; set; } = "https://generativelanguage.googleapis.com";
     public double? PricePerMillionInput { get; set; }
     public double? PricePerMillionOutput { get; set; }
     public int TimeoutSeconds { get; set; } = 300;
