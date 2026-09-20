@@ -39,7 +39,7 @@ public static IServiceCollection AddKdpInfrastructure(this IServiceCollection se
         services.Configure<GeminiOptions>(o =>
         {
             o.ApiKey = configuration[KdpSettings.GeminiApiKeyEnvKey] ?? string.Empty;
-            o.Model = configuration[KdpSettings.GeminiModelEnvKey] ?? "gemini-3.8-flash";
+            o.Model = configuration[KdpSettings.GeminiModelEnvKey] ?? "gemini-2.5-flash";
             o.BaseUrl = configuration[KdpSettings.GeminiBaseEnvKey] ?? "https://generativelanguage.googleapis.com";
             o.Enabled = !string.IsNullOrWhiteSpace(o.ApiKey);
         });
