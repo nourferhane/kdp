@@ -97,6 +97,10 @@ if (app.Environment.IsProduction())
 }
 app.UseForwardedHeaders(forwardedHeadersOptions);
 
+// Serve wwwroot assets (app.css, images, etc.). Without this the Blazor UI renders
+// as unstyled HTML in production.
+app.UseStaticFiles();
+
 app.UseHttpsRedirection();
 app.UseAntiforgery();
 app.UseAuthentication();
