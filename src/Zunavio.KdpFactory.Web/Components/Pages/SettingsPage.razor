@@ -6,6 +6,7 @@
 @inject IGoogleConfigurationSettings Gcs
 @inject IGoogleControlCenterSyncService Sync
 @inject IGoogleDriveAgentDefinitionSeeder AgentSeeder
+@inject ILanguageModelClient LanguageModel
 @using Microsoft.Extensions.Options
 @using Zunavio.KdpFactory.Infrastructure.Configuration
 @using Zunavio.KdpFactory.Application.Abstractions
@@ -48,6 +49,21 @@
                     Set <code>AI_PROVIDER</code> to <code>Gemini</code> with <code>GEMINI_API_KEY</code>,
                     or to <code>OpenAI</code> with <code>OPENAI_API_KEY</code>.
                 </p>
+            }
+            else
+            {
+                <div class="actions" style="margin-top:14px;">
+                    <button class="btn-primary" @onclick="TestAi" disabled="@_testingAi">
+                        @(_testingAi ? "Testing..." : "Test AI connection")
+                    </button>
+                </div>
+            }
+
+            @if (_aiTestMessage is not null)
+            {
+                <div class="alert @(_aiTestOk ? "info" : "")" style="margin-top:12px;">
+                    @_aiTestMessage
+                </div>
             }
         </div>
     </div>
@@ -97,6 +113,57 @@
 
     private ControlCenterImportResult? _result;
     private string? _error;
+    private bool _testingAi;
+    private bool _aiTestOk;
+    private string? _aiTestMessage;
+
+    private async Task TestAi()
+    {
+        _testingAi = true;
+        _aiTestMessage = null;
+        _aiTestOk = false;
+
+        try
+        {
+            var result = await LanguageModel.CompleteStructuredAsync(
+                new LanguageModelRequest
+                {
+                    Model = SelectedModel,
+                    Messages =
+                    [
+                        LanguageModelMessage.System("You are a connectivity test. Return only valid JSON."),
+                        LanguageModelMessage.User("Return an object with status set to ok.")
+                    ],
+                    ResponseSchemaName = "connectivity_test",
+                    ResponseSchemaJson = """
+                        {
+                          "type": "object",
+                          "properties": {
+                            "status": { "type": "string" }
+                          },
+                          "required": ["status"],
+                          "additionalProperties": false
+                        }
+                        """,
+                    MaxTokens = 64
+                },
+                CancellationToken.None);
+
+            var status = result.StructuredOutput["status"]?.GetValue<string>();
+            _aiTestOk = string.Equals(status, "ok", StringComparison.OrdinalIgnoreCase);
+            _aiTestMessage = _aiTestOk
+                ? $"✓ {AiProvider.Value.Provider} API OK · model {result.Model} · {result.Duration.TotalMilliseconds:N0} ms"
+                : $"API responded, but the test payload was unexpected: {result.StructuredOutput.ToJsonString()}";
+        }
+        catch (Exception ex)
+        {
+            _aiTestMessage = $"✗ AI connection failed: {ex.Message}";
+        }
+        finally
+        {
+            _testingAi = false;
+        }
+    }
 
     private async Task Import()
     {
