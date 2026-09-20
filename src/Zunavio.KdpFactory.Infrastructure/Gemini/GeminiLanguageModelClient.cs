@@ -36,7 +36,7 @@ public sealed class GeminiLanguageModelClient : ILanguageModelClient
         if (model.StartsWith("models/", StringComparison.OrdinalIgnoreCase))
             model = model["models/".Length..];
 
-        var payload = BuildPayload(request);
+        var payload = BuildPayload(request, model);
         var body = payload.ToJsonString(new JsonSerializerOptions(JsonSerializerDefaults.Web));
         var endpoint = $"{_options.BaseUrl.TrimEnd('/')}/v1beta/models/{Uri.EscapeDataString(model)}:generateContent";
 
@@ -111,7 +111,10 @@ public sealed class GeminiLanguageModelClient : ILanguageModelClient
             }
             catch (JsonException ex)
             {
-                throw new InvalidOperationException($"Gemini returned non-JSON content for model '{model}': {ex.Message}", ex);
+                throw new InvalidOperationException(
+                    $"Gemini returned non-JSON content for model '{model}': {ex.Message}. " +
+                    $"Response starts with: {Truncate(generated.Trim(), 240)}",
+                    ex);
             }
 
             var usage = root["usageMetadata"];
@@ -141,7 +144,7 @@ public sealed class GeminiLanguageModelClient : ILanguageModelClient
         }
     }
 
-    private static JsonObject BuildPayload(LanguageModelRequest request)
+    private static JsonObject BuildPayload(LanguageModelRequest request, string model)
     {
         var root = new JsonObject();
 
@@ -173,17 +176,53 @@ public sealed class GeminiLanguageModelClient : ILanguageModelClient
         var generation = new JsonObject
         {
             ["temperature"] = 0.4,
-            ["responseMimeType"] = "application/json",
         };
 
         if (request.MaxTokens is > 0)
             generation["maxOutputTokens"] = request.MaxTokens.Value;
 
-        if (!string.IsNullOrWhiteSpace(request.ResponseSchemaJson))
-            generation["responseJsonSchema"] = JsonNode.Parse(request.ResponseSchemaJson);
+        var schema = string.IsNullOrWhiteSpace(request.ResponseSchemaJson)
+            ? null
+            : JsonNode.Parse(request.ResponseSchemaJson);
+
+        // Gemini 3.x uses the newer responseFormat.text contract for
+        // structured output. Gemini 2.x keeps the legacy responseMimeType /
+        // responseJsonSchema fields. Keeping both paths lets Railway switch
+        // models by environment variable without changing application code.
+        if (UsesResponseFormat(model))
+        {
+            var textFormat = new JsonObject
+            {
+                ["mimeType"] = "application/json",
+            };
+
+            if (schema is not null)
+                textFormat["schema"] = schema;
+
+            generation["responseFormat"] = new JsonObject
+            {
+                ["text"] = textFormat,
+            };
+        }
+        else
+        {
+            generation["responseMimeType"] = "application/json";
+
+            if (schema is not null)
+                generation["responseJsonSchema"] = schema;
+        }
 
         root["generationConfig"] = generation;
         return root;
+    }
+
+    private static bool UsesResponseFormat(string model)
+    {
+        var normalized = model.StartsWith("models/", StringComparison.OrdinalIgnoreCase)
+            ? model["models/".Length..]
+            : model;
+
+        return normalized.StartsWith("gemini-3.", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsTransient(HttpStatusCode status) =>
