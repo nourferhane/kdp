@@ -193,7 +193,7 @@ public sealed class GeminiLanguageModelClient : ILanguageModelClient
         {
             var textFormat = new JsonObject
             {
-                ["mimeType"] = "application/json",
+                ["mimeType"] = "APPLICATION_JSON",
             };
 
             if (schema is not null)
