@@ -1,5 +1,7 @@
 @page "/settings"
+@inject IOptions<AiProviderOptions> AiProvider
 @inject IOptions<OpenAiOptions> OpenAi
+@inject IOptions<GeminiOptions> Gemini
 @inject IOptions<GoogleOptions> Google
 @inject IGoogleConfigurationSettings Gcs
 @inject IGoogleControlCenterSyncService Sync
@@ -26,10 +28,11 @@
     <div class="card">
         <div class="card-body">
             <ul class="kv-grid">
-                <li><span class="k">Enabled</span><span class="v">@(OpenAi.Value.Enabled ? "yes" : "no")</span></li>
-                <li><span class="k">Model</span><span class="v">@OpenAi.Value.Model</span></li>
+                <li><span class="k">Provider</span><span class="v">@AiProvider.Value.Provider</span></li>
+                <li><span class="k">Enabled</span><span class="v">@(SelectedProviderEnabled ? "yes" : "no")</span></li>
+                <li><span class="k">Model</span><span class="v">@SelectedModel</span></li>
                 <li><span class="k">Status</span><span>
-                    @if (OpenAi.Value.Enabled)
+                    @if (SelectedProviderEnabled)
                     {
                         <span class="badge ok">● online</span>
                     }
@@ -39,9 +42,12 @@
                     }
                 </span></li>
             </ul>
-            @if (!OpenAi.Value.Enabled)
+            @if (!SelectedProviderEnabled)
             {
-                <p class="muted" style="margin-top:12px;">Set <code>OPENAI_API_KEY</code> to enable AI agents. Deterministic orchestration still works without it.</p>
+                <p class="muted" style="margin-top:12px;">
+                    Set <code>AI_PROVIDER</code> to <code>Gemini</code> with <code>GEMINI_API_KEY</code>,
+                    or to <code>OpenAI</code> with <code>OPENAI_API_KEY</code>.
+                </p>
             }
         </div>
     </div>
@@ -85,6 +91,10 @@
 }
 
 @code {
+    private bool IsGemini => string.Equals(AiProvider.Value.Provider, "Gemini", StringComparison.OrdinalIgnoreCase);
+    private bool SelectedProviderEnabled => IsGemini ? Gemini.Value.Enabled : OpenAi.Value.Enabled;
+    private string SelectedModel => IsGemini ? Gemini.Value.Model : OpenAi.Value.Model;
+
     private ControlCenterImportResult? _result;
     private string? _error;
 
