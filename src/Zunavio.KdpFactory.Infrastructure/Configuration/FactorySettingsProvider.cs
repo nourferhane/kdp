@@ -34,7 +34,7 @@ public sealed class FactorySettingsProvider(
             ],
             AiProvider = string.IsNullOrWhiteSpace(aiProvider.Value.Provider) ? "OpenAI" : aiProvider.Value.Provider,
             DefaultModel = aiProvider.Value.Provider.Equals("Gemini", StringComparison.OrdinalIgnoreCase)
-                ? (string.IsNullOrWhiteSpace(gemini.Value.Model) ? "gemini-3.8-flash" : gemini.Value.Model)
+                ? (string.IsNullOrWhiteSpace(gemini.Value.Model) ? "gemini-2.5-flash" : gemini.Value.Model)
                 : (string.IsNullOrWhiteSpace(openAi.Value.Model) ? "gpt-4o-mini" : openAi.Value.Model),
             EnableAiOrchestrator = true,
             MaxAgentRetries = aiProvider.Value.Provider.Equals("Gemini", StringComparison.OrdinalIgnoreCase)

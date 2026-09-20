@@ -281,18 +281,26 @@ public sealed class OrchestrationEngine : IOrchestrationEngine
         var settings = await _settings.GetAsync(ct);
         if (settings.GoogleEnabled)
         {
-            try
-            {
-                var title = $"{project.ProjectCode}_{Enum.GetName(assetType)!.ToUpperInvariant()}_v{versionText}";
-                var saved = await _artifacts.SaveArtifactAsync(project.ProjectCode, assetType, versionText, title, result.OutputJson, ct);
-                driveFileId = saved.DriveFileId;
-                driveUrl = saved.DriveUrl;
-                _logger.LogInformation("Saved {AssetType} for {ProjectCode} to Drive ({DriveFileId}).", assetType, project.ProjectCode, saved.DriveFileId);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Drive save failed for {AssetType} of {ProjectCode}; content stays in PostgreSQL.", assetType, project.ProjectCode);
-            }
+            // Strict factory mode: Drive persistence is part of a successful
+            // agent run. If this fails, the run fails and the gate cannot
+            // advance with an unsynchronized/local-only artifact.
+            var title = $"{project.ProjectCode}_{Enum.GetName(assetType)!.ToUpperInvariant()}_v{versionText}";
+            var saved = await _artifacts.SaveArtifactAsync(
+                project.ProjectCode,
+                assetType,
+                versionText,
+                title,
+                result.OutputJson,
+                ct);
+
+            driveFileId = saved.DriveFileId;
+            driveUrl = saved.DriveUrl;
+
+            _logger.LogInformation(
+                "Saved {AssetType} for {ProjectCode} to Drive ({DriveFileId}).",
+                assetType,
+                project.ProjectCode,
+                saved.DriveFileId);
         }
 
         var assetCode = _codes.AssetCode(project.ProjectCode, assetType, $"v{versionText}");
