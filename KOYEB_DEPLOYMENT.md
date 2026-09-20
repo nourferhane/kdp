@@ -53,8 +53,11 @@ commit them.
 | `MIGRATE_ON_STARTUP` | `true` for the first deploy (applies EF migrations), `false` afterwards |
 | `SEED_DEMO_PROJECT` | `false` in production |
 | `RUN_BACKGROUND_WORKER` | `true` (web + worker run in the same service) |
-| `OPENAI_API_KEY` | secret — enables the AI agent layer when provided |
-| `OPENAI_MODEL` | `gpt-4o-mini` or your model |
+| `AI_PROVIDER` | `Gemini` or `OpenAI` |
+| `GEMINI_API_KEY` | secret — Gemini Developer API key |
+| `GEMINI_MODEL` | `gemini-3.8-flash` by default |
+| `OPENAI_API_KEY` | optional alternative secret when `AI_PROVIDER=OpenAI` |
+| `OPENAI_MODEL` | `gpt-4o-mini` or your OpenAI model |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | secret — full service-account JSON on one line |
 | `GOOGLE_ROOT_FOLDER_ID` | `13ni2nWoQ4V9mxiC0BvPKPMoBgxHEdJvC` |
 | `GOOGLE_PROMPTS_FOLDER_ID` | `1jfwxolnzema4QCE1YYPBDtBKgDphDMIY` |
