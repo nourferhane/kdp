@@ -1,12 +1,34 @@
 @page "/agents"
 @inject IAgentDefinitionQueryService Agents
+@inject IGoogleConfigurationSettings GoogleConfiguration
+@inject IGoogleDriveAgentDefinitionSeeder AgentSeeder
+@using Zunavio.KdpFactory.Infrastructure.Google
 
 <div class="page-head">
     <div>
         <h1>Agents</h1>
         <div class="sub">The catalog of pipeline agents and their prompt documents.</div>
     </div>
+    <div class="actions">
+        <button class="btn" @onclick="SyncPrompts" disabled="@_syncing">
+            @(_syncing ? "Syncing..." : "Sync prompt docs")
+        </button>
+    </div>
 </div>
+
+@if (_syncError is not null)
+{
+    <div class="alert">
+        Google prompt sync failed: @_syncError
+    </div>
+}
+
+@if (_syncMessage is not null)
+{
+    <div class="alert info">
+        @_syncMessage
+    </div>
+}
 
 @if (_agents.Count == 0)
 {
@@ -30,7 +52,7 @@ else
                     {
                         <div>Synced: <b>@a.PromptLastSyncedAt.Value.ToLocalTime():g</b></div>
                     }
-                    @if (a.PromptDriveFileId is not null)
+                    @if (!string.IsNullOrWhiteSpace(a.PromptDriveFileId))
                     {
                         <div>Prompt doc: <b><a href="https://docs.google.com/document/d/@a.PromptDriveFileId/edit" target="_blank" rel="noopener">open ↗</a></b></div>
                     }
@@ -46,7 +68,51 @@ else
 
 @code {
     private List<AgentDefinitionDto> _agents = [];
+    private bool _syncing;
+    private string? _syncError;
+    private string? _syncMessage;
 
     protected override async Task OnInitializedAsync()
-        => _agents = (await Agents.GetAllAsync(CancellationToken.None)).OrderBy(a => a.Code).ToList();
+    {
+        // If Google is configured, try to link the official AGENT_00..09 docs
+        // before rendering status. This removes the need for a separate manual
+        // discovery step after first deployment or credential changes.
+        if (GoogleConfiguration.GoogleEnabled)
+        {
+            await SyncPrompts();
+            return;
+        }
+
+        await ReloadAgents();
+    }
+
+    private async Task SyncPrompts()
+    {
+        _syncing = true;
+        _syncError = null;
+        _syncMessage = null;
+
+        try
+        {
+            await AgentSeeder.SeedPromptFileIdsAsync(CancellationToken.None);
+            await ReloadAgents();
+
+            var linked = _agents.Count(a => !string.IsNullOrWhiteSpace(a.PromptDriveFileId));
+            _syncMessage = $"Prompt documents linked: {linked}/{_agents.Count}.";
+        }
+        catch (Exception ex)
+        {
+            _syncError = ex.Message;
+            await ReloadAgents();
+        }
+        finally
+        {
+            _syncing = false;
+        }
+    }
+
+    private async Task ReloadAgents()
+        => _agents = (await Agents.GetAllAsync(CancellationToken.None))
+            .OrderBy(a => a.Code)
+            .ToList();
 }
