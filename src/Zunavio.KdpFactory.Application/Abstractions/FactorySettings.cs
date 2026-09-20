@@ -12,6 +12,8 @@ public sealed record FactorySettings
     /// <summary>Hard guardrails the Scout/Validator must respect (e.g. banned categories).</summary>
     public IReadOnlyList<string> MarketplaceConstraints { get; init; } = [];
 
+    public string AiProvider { get; init; } = "OpenAI";
+
     public required string DefaultModel { get; init; }
 
     /// <summary>Whether the AI Orchestrator step runs after each specialist run.</summary>

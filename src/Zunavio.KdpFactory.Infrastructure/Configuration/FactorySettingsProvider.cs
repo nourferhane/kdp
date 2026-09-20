@@ -12,7 +12,9 @@ namespace Zunavio.KdpFactory.Infrastructure.Configuration;
 /// the single place where non-secret factory settings reach agents.
 /// </summary>
 public sealed class FactorySettingsProvider(
+    IOptions<AiProviderOptions> aiProvider,
     IOptions<OpenAiOptions> openAi,
+    IOptions<GeminiOptions> gemini,
     IOptions<GoogleOptions> google) : IFactorySettingsProvider
 {
     public Task<FactorySettings> GetAsync(CancellationToken cancellationToken = default)
@@ -30,9 +32,14 @@ public sealed class FactorySettingsProvider(
                 "Target age ranges must be clearly defined between 0-18.",
                 "Picture/activity books must be evergreen (not tied to a single holiday unless explicitly seasonal).",
             ],
-            DefaultModel = string.IsNullOrWhiteSpace(openAi.Value.Model) ? "gpt-4o-mini" : openAi.Value.Model,
+            AiProvider = string.IsNullOrWhiteSpace(aiProvider.Value.Provider) ? "OpenAI" : aiProvider.Value.Provider,
+            DefaultModel = aiProvider.Value.Provider.Equals("Gemini", StringComparison.OrdinalIgnoreCase)
+                ? (string.IsNullOrWhiteSpace(gemini.Value.Model) ? "gemini-3.8-flash" : gemini.Value.Model)
+                : (string.IsNullOrWhiteSpace(openAi.Value.Model) ? "gpt-4o-mini" : openAi.Value.Model),
             EnableAiOrchestrator = true,
-            MaxAgentRetries = Math.Max(1, openAi.Value.MaxRetries),
+            MaxAgentRetries = aiProvider.Value.Provider.Equals("Gemini", StringComparison.OrdinalIgnoreCase)
+                ? Math.Max(1, gemini.Value.MaxRetries)
+                : Math.Max(1, openAi.Value.MaxRetries),
             GooglePagesPerCall = 100,
             GoogleEnabled = google.Value.IsConfigured,
         };
