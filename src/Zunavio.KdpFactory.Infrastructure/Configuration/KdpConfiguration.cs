@@ -79,14 +79,14 @@ public static class DatabaseOptions
 {
     /// <summary>
     /// Builds an Npgsql connection string from an optional postgres:// DATABASE_URL
-    /// (Heroku/Render style) or an ordinary connection string, in that order.
+    /// (Heroku/Render/Koyeb/Supabase style) or an ordinary connection string, in that order.
     /// </summary>
-    public static string BuildConnectionString(IConfiguration configuration)
+    public static string BuildConnectionString(IConfiguration configuration, bool isProduction = false)
     {
         var databaseUrl = configuration[KdpSettings.DbUrlEnvKey];
         if (!string.IsNullOrWhiteSpace(databaseUrl))
         {
-            return FromDatabaseUrl(databaseUrl);
+            return FromDatabaseUrl(databaseUrl, isProduction);
         }
 
         var plain = configuration[KdpSettings.DefaultConnectionKey];
@@ -99,7 +99,14 @@ public static class DatabaseOptions
             $"No database configured. Set '{KdpSettings.DbUrlEnvKey}' or '{KdpSettings.DefaultConnectionKey}'.");
     }
 
-    public static string FromDatabaseUrl(string databaseUrl)
+    /// <summary>
+    /// Parses a postgres:// or postgresql:// URL into an Npgsql connection string.
+    /// Username/password are URL-decoded (Supabase credentials may encode '@', ':', '%').
+    /// In production SSL defaults to Require (encryption on, certificate not silently
+    /// disabled) and IncludeErrorDetail is off; both can be tuned with ?sslmode= and
+    /// ?includedetail= query parameters.
+    /// </summary>
+    public static string FromDatabaseUrl(string databaseUrl, bool isProduction = false)
     {
         if (!Uri.TryCreate(databaseUrl, UriKind.Absolute, out var uri)
             || (uri.Scheme != "postgres" && uri.Scheme != "postgresql"))
@@ -107,16 +114,17 @@ public static class DatabaseOptions
             throw new InvalidOperationException($"'{KdpSettings.DbUrlEnvKey}' must be a postgres:// URL.");
         }
 
+        var userInfo = uri.UserInfo.Split(':', 2);
+        var sslMode = isProduction ? SslMode.Require : SslMode.Prefer;
         var builder = new NpgsqlConnectionStringBuilder
         {
             Host = uri.Host,
             Port = uri.IsDefaultPort ? 5432 : uri.Port,
             Database = uri.AbsolutePath.TrimStart('/'),
-            Username = uri.UserInfo.Split(':', 2)[0],
-            Password = uri.UserInfo.Contains(':') ? uri.UserInfo.Split(':', 2)[1] : string.Empty,
-            SslMode = SslMode.Prefer,
-            TrustServerCertificate = true,
-            IncludeErrorDetail = true,
+            Username = Uri.UnescapeDataString(userInfo[0]),
+            Password = userInfo.Length > 1 ? Uri.UnescapeDataString(userInfo[1]) : string.Empty,
+            SslMode = sslMode,
+            IncludeErrorDetail = !isProduction,
         };
 
         var queryPairs = uri.Query.TrimStart('?')
@@ -129,7 +137,8 @@ public static class DatabaseOptions
             if (string.IsNullOrWhiteSpace(key)) continue;
             switch (key.ToLowerInvariant())
             {
-                case "sslmode" when Enum.TryParse<SslMode>(value, true, out var mode): builder.SslMode = mode; break;
+                case "sslmode" when TryParseEnumIgnoringSeparators(value, out SslMode mode): builder.SslMode = mode; break;
+                case "includedetail" when bool.TryParse(value, out var detail): builder.IncludeErrorDetail = detail; break;
                 case "application_name": builder.ApplicationName = value; break;
                 case "pooling" when bool.TryParse(value, out var pooling): builder.Pooling = pooling; break;
                 case "timeout" when int.TryParse(value, out var timeout): builder.Timeout = timeout; break;
@@ -139,5 +148,22 @@ public static class DatabaseOptions
 
         builder.ApplicationName ??= "kdp-factory";
         return builder.ConnectionString;
+    }
+
+    /// <summary>
+    /// Enum.TryParse that also accepts kebab/snake style values (e.g. "verify-full",
+    /// "prefer_nossl") regardless of a separator-less enum name.
+    /// </summary>
+    private static bool TryParseEnumIgnoringSeparators<TEnum>(string value, out TEnum result) where TEnum : struct
+    {
+        result = default;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        var normalized = value.Replace("-", string.Empty, StringComparison.Ordinal)
+            .Replace("_", string.Empty, StringComparison.Ordinal);
+        return Enum.TryParse(normalized, true, out result);
     }
 }

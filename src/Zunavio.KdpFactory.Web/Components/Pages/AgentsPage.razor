@@ -1,44 +1,47 @@
 @page "/agents"
 @inject IAgentDefinitionQueryService Agents
 
-<h1>Agents</h1>
-
-<table class="grid">
-    <thead>
-        <tr>
-            <th>Code</th>
-            <th>Name</th>
-            <th>Enabled</th>
-            <th>Prompt version</th>
-            <th>Prompt doc</th>
-        </tr>
-    </thead>
-    <tbody>
-        @foreach (var a in _agents)
-        {
-            <tr>
-                <td>@a.Code</td>
-                <td>@a.Name</td>
-                <td>@a.Enabled</td>
-                <td>@a.PromptVersion</td>
-                <td>
-                    @if (a.PromptDriveFileId is not null)
-                    {
-                        <a href="https://docs.google.com/document/d/@a.PromptDriveFileId/edit" target="_blank" rel="noopener">open ↗</a>
-                    }
-                    else
-                    {
-                        <span class="muted">offline</span>
-                    }
-                </td>
-            </tr>
-        }
-    </tbody>
-</table>
+<div class="page-head">
+    <div>
+        <h1>Agents</h1>
+        <div class="sub">The catalog of pipeline agents and their prompt documents.</div>
+    </div>
+</div>
 
 @if (_agents.Count == 0)
 {
-    <p class="muted">No agent definitions seeded. The startup seeder creates the catalog on first run.</p>
+    <div class="empty">No agent definitions seeded. The startup seeder creates the catalog on first run.</div>
+}
+else
+{
+    <div class="card-grid">
+        @foreach (var a in _agents)
+        {
+            <div class="card agent-card">
+                <div class="topline">
+                    <h3>@a.Name</h3>
+                    <span class="badge @(a.Enabled ? "ok" : "muted-badge")">@(a.Enabled ? "enabled" : "disabled")</span>
+                </div>
+                <p class="desc">@a.Description</p>
+                <div class="facts">
+                    <div>Code: <b>@a.Code</b></div>
+                    <div>Prompt version: <b>@a.PromptVersion</b></div>
+                    @if (a.PromptLastSyncedAt.HasValue)
+                    {
+                        <div>Synced: <b>@a.PromptLastSyncedAt.Value.ToLocalTime():g</b></div>
+                    }
+                    @if (a.PromptDriveFileId is not null)
+                    {
+                        <div>Prompt doc: <b><a href="https://docs.google.com/document/d/@a.PromptDriveFileId/edit" target="_blank" rel="noopener">open ↗</a></b></div>
+                    }
+                    else
+                    {
+                        <div>Prompt doc: <b class="muted">offline — no Drive doc linked</b></div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
 }
 
 @code {

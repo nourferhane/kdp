@@ -1,57 +1,88 @@
 @page "/"
 @inject IProjectQueryService Projects
 @inject IOrchestratorService Orchestrator
+@using Zunavio.KdpFactory.Domain.Enums
 
-<h1>Projects</h1>
-
-@if (_busy)
-{
-    <p>Working…</p>
-}
-else
-{
-    <button class="btn-primary" @onclick="CreateDemo">+ New project</button>
-    <button class="btn" @onclick="Load">Refresh</button>
-}
+<div class="page-head">
+    <div>
+        <h1>Projects</h1>
+        <div class="sub">Multi-agent publishing pipeline — one project per book.</div>
+    </div>
+    <div class="page-actions">
+        <button class="btn-primary" @onclick="CreateDemo" disabled="@_busy">+ New project</button>
+        <button class="btn" @onclick="Load">⟳ Refresh</button>
+    </div>
+</div>
 
 @if (_error is not null)
 {
     <div class="alert">@_error</div>
 }
 
-<table class="grid">
-    <thead>
-        <tr>
-            <th>Code</th>
-            <th>Title</th>
-            <th>Gate</th>
-            <th>Status</th>
-            <th>Next action</th>
-            <th>Reviews</th>
-            <th>Jobs</th>
-            <th>Updated</th>
-        </tr>
-    </thead>
-    <tbody>
-        @foreach (var p in _projects)
-        {
-            <tr>
-                <td><a href="/projects/@p.Id">@p.ProjectCode</a></td>
-                <td>@p.WorkingTitle</td>
-                <td>@p.CurrentGate</td>
-                <td>@p.Status</td>
-                <td>@p.NextAction</td>
-                <td>@p.PendingReviews</td>
-                <td>@(p.HasRunningJobs ? "running" : "idle")</td>
-                <td>@p.UpdatedAt.ToLocalTime():g</td>
-            </tr>
-        }
-    </tbody>
-</table>
+<div class="stat-grid">
+    <div class="card stat-card">
+        <div>
+            <span class="stat-ico">▣</span>
+        </div>
+        <div class="stat-value">@_projects.Count</div>
+        <div class="stat-label">Total projects</div>
+    </div>
+    <div class="card stat-card">
+        <div class="stat-value" style="color: var(--success)">@(_projects.Count(p => p.Status == ProjectStatus.Active))</div>
+        <div class="stat-label">Active</div>
+    </div>
+    <div class="card stat-card">
+        <div class="stat-value" style="color: var(--warn)">@(_projects.Sum(p => p.PendingReviews))</div>
+        <div class="stat-label">Pending reviews</div>
+    </div>
+    <div class="card stat-card">
+        <div class="stat-value" style="color: var(--accent)">@(_projects.Count(p => p.HasRunningJobs))</div>
+        <div class="stat-label">Running jobs</div>
+    </div>
+</div>
 
 @if (_projects.Count == 0)
 {
-    <p class="muted">No projects yet. Create one or run the demo seed (see README).</p>
+    <div class="empty">No projects yet. Create one with <b>+ New project</b> or run the demo seed (see README).</div>
+}
+else
+{
+    <div class="card-grid">
+        @foreach (var p in _projects)
+        {
+            <div class="card project-card">
+                <div class="topline">
+                    <span class="code">@p.ProjectCode</span>
+                    <span class="grow"></span>
+                    <span class="badge @GateClass(p.CurrentGate)">● @p.CurrentGate</span>
+                </div>
+                <h3><a href="/projects/@p.Id">@p.WorkingTitle</a></h3>
+                <div class="meta-line">
+                    <span>@p.Marketplace</span>
+                    <span>@p.Language</span>
+                    @if (p.TargetAge.Length > 0)
+                    {
+                        <span>Ages @p.TargetAge</span>
+                    }
+                </div>
+                <div class="footline">
+                    <span>Next: <b>@p.NextAction</b></span>
+                    <span class="small">@p.UpdatedAt.ToLocalTime():g</span>
+                </div>
+                <div>
+                    <span class="badge @StatusClass(p.Status)">@p.Status</span>
+                    @if (p.PendingReviews > 0)
+                    {
+                        <a class="badge wait" href="/reviews">@p.PendingReviews review@(p.PendingReviews == 1 ? "" : "s") ⚑</a>
+                    }
+                    @if (p.HasRunningJobs)
+                    {
+                        <span class="badge blue">◈ running</span>
+                    }
+                </div>
+            </div>
+        }
+    </div>
 }
 
 @code {
@@ -97,4 +128,29 @@ else
             _busy = false;
         }
     }
+
+    private static string GateClass(ProjectGate gate) => gate switch
+    {
+        ProjectGate.Idea => "blue",
+        ProjectGate.MarketResearch => "teal",
+        ProjectGate.MarketValidation => "violet",
+        ProjectGate.Architecture => "cyan",
+        ProjectGate.Manuscript => "pink",
+        ProjectGate.VisualProduction => "orange",
+        ProjectGate.BookProduction => "yellow",
+        ProjectGate.Metadata => "blue",
+        ProjectGate.Qa => "green",
+        ProjectGate.ReadyToPublish => "lime",
+        ProjectGate.Published => "ok",
+        _ => "blue",
+    };
+
+    private static string StatusClass(ProjectStatus status) => status switch
+    {
+        ProjectStatus.Active => "ok",
+        ProjectStatus.Paused => "wait",
+        ProjectStatus.Rejected => "bad",
+        ProjectStatus.Completed => "blue",
+        _ => "muted-badge",
+    };
 }

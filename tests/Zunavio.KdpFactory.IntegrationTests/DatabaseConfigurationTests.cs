@@ -17,6 +17,47 @@ public class DatabaseConfigurationTests
         Assert.False(string.IsNullOrEmpty(csb.Password) && url.Contains('@'));
     }
 
+    [Fact]
+    public void FromDatabaseUrl_decodes_url_encoded_credentials()
+    {
+        // Supabase-style passwords commonly contain '@' ':' '%' etc. URL-encoded.
+        var csb = new Npgsql.NpgsqlConnectionStringBuilder(
+            DatabaseOptions.FromDatabaseUrl("postgres://my%40user:p%40ss%3Aw%2Frd%25@db.example.com:5432/kdpfactory"));
+
+        Assert.Equal("my@user", csb.Username);
+        Assert.Equal("p@ss:w/rd%", csb.Password);
+        Assert.Equal("db.example.com", csb.Host);
+    }
+
+    [Fact]
+    public void FromDatabaseUrl_defaults_to_ssl_require_in_production()
+    {
+        var csb = new Npgsql.NpgsqlConnectionStringBuilder(
+            DatabaseOptions.FromDatabaseUrl("postgres://u:p@db.example.com:5432/postgres", isProduction: true));
+
+        Assert.Equal(Npgsql.SslMode.Require, csb.SslMode);
+        Assert.False(csb.IncludeErrorDetail);
+    }
+
+    [Fact]
+    public void FromDatabaseUrl_is_permissive_in_non_production()
+    {
+        var csb = new Npgsql.NpgsqlConnectionStringBuilder(
+            DatabaseOptions.FromDatabaseUrl("postgres://u:p@db.example.com:5432/postgres", isProduction: false));
+
+        Assert.Equal(Npgsql.SslMode.Prefer, csb.SslMode);
+        Assert.True(csb.IncludeErrorDetail);
+    }
+
+    [Fact]
+    public void FromDatabaseUrl_accepts_explicit_sslmode_override()
+    {
+        var csb = new Npgsql.NpgsqlConnectionStringBuilder(
+            DatabaseOptions.FromDatabaseUrl("postgres://u:p@db.example.com:5432/postgres?sslmode=verify-full", isProduction: true));
+
+        Assert.Equal(Npgsql.SslMode.VerifyFull, csb.SslMode);
+    }
+
     [Theory]
     [InlineData("http://user:pass@localhost:5432/db")]
     [InlineData("")]

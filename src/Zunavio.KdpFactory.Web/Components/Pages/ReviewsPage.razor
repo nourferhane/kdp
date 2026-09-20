@@ -2,46 +2,50 @@
 @inject IReviewQueryService Reviews
 @inject IHumanReviewService ReviewService
 @using Zunavio.KdpFactory.Application.HumanReview
+@using Zunavio.KdpFactory.Domain.Enums
 
-<h1>Pending reviews</h1>
+<div class="page-head">
+    <div>
+        <h1>Pending reviews</h1>
+        <div class="sub">Gate transitions and agent outputs that need a human in the loop.</div>
+    </div>
+    <div class="page-actions">
+        <button class="btn" @onclick="Load">⟳ Refresh</button>
+    </div>
+</div>
 
 @if (_error is not null)
 {
     <div class="alert">@_error</div>
 }
 
-<table class="grid">
-    <thead>
-        <tr>
-            <th>Project</th>
-            <th>Type</th>
-            <th>Title</th>
-            <th>Description</th>
-            <th>Requested</th>
-            <th></th>
-        </tr>
-    </thead>
-    <tbody>
-        @foreach (var r in _reviews)
-        {
-            <tr>
-                <td>@r.ProjectCode</td>
-                <td>@r.ReviewType</td>
-                <td>@r.Title</td>
-                <td class="wrap">@r.Description</td>
-                <td>@r.RequestedAt.ToLocalTime():g</td>
-                <td>
-                    <button class="btn-primary" @onclick="() => Resolve(r.Id, true)">Approve</button>
-                    <button class="btn-danger" @onclick="() => Resolve(r.Id, false)">Reject</button>
-                </td>
-            </tr>
-        }
-    </tbody>
-</table>
-
 @if (_reviews.Count == 0)
 {
-    <p class="muted">No pending reviews. Gate transitions and agent outputs that need a human will show up here.</p>
+    <div class="empty">No pending reviews. Mandatory review gates will appear here automatically when an agent generates output.</div>
+}
+else
+{
+    <div class="review-list">
+        @foreach (var r in _reviews)
+        {
+            <div class="card review-card">
+                <div class="topline">
+                    <span class="code" style="font-weight:750; letter-spacing:0.03em; font-size:12px; color: var(--muted);">@r.ProjectCode</span>
+                    <span class="badge @ReviewTypeClass(r.ReviewType)">@r.ReviewType</span>
+                    <span class="grow" style="flex:1"></span>
+                    <span class="small muted">@r.RequestedAt.ToLocalTime():g</span>
+                </div>
+                <div class="title">@r.Title</div>
+                <div class="desc">@r.Description</div>
+                <div class="actions">
+                    <a class="btn-ghost" href="/projects/@r.ProjectId">Open project ↗</a>
+                    <span class="grow" style="flex:1"></span>
+                    <button class="btn-primary" @onclick="() => Resolve(r.Id, true)">Approve</button>
+                    <button class="btn-danger" @onclick="() => Resolve(r.Id, false)">Reject</button>
+                </div>
+            </div>
+        }
+    </div>
 }
 
 @code {
@@ -71,4 +75,13 @@
         _error = result.Success ? null : result.Error;
         await Load();
     }
+
+    private static string ReviewTypeClass(HumanReviewType type) => type switch
+    {
+        HumanReviewType.ConceptSelection => "violet",
+        HumanReviewType.ImageGenerationApproval => "pink",
+        HumanReviewType.QaUnresolvedIssues => "orange",
+        HumanReviewType.PrePublication => "cyan",
+        _ => "blue",
+    };
 }

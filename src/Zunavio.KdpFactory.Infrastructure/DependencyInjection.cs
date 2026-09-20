@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Npgsql;
 using Zunavio.KdpFactory.Application.Abstractions;
@@ -17,8 +18,8 @@ namespace Zunavio.KdpFactory.Infrastructure;
 
 public static class DependencyInjection
 {
-    public static IServiceCollection AddKdpInfrastructure(this IServiceCollection services, IConfiguration configuration)
-    {
+public static IServiceCollection AddKdpInfrastructure(this IServiceCollection services, IConfiguration configuration, IHostEnvironment? environment = null)
+{
         // ---- Options (from env vars via appsettings / secrets) ----
         services.Configure<OpenAiOptions>(o =>
         {
@@ -54,7 +55,8 @@ public static class DependencyInjection
         });
 
         // ---- EF Core + PostgreSQL ----
-        var connectionString = DatabaseOptions.BuildConnectionString(configuration);
+        var isProduction = environment is null || environment.IsProduction();
+        var connectionString = DatabaseOptions.BuildConnectionString(configuration, isProduction);
         services.AddDbContext<KdpDbContext>(builder =>
             builder.UseNpgsql(connectionString, npgsql =>
             {

@@ -52,13 +52,23 @@ docker compose up -d db        # Postgres on 5432
 dotnet run --project src/Zunavio.KdpFactory.Web
 ```
 
+The dashboard and REST API are protected by cookie authentication. Sign in with
+`ADMIN_USERNAME` / `ADMIN_PASSWORD` (from `.env`; the example defaults are
+`admin` / `change-me`). In **Production** both values are **required** and the
+app refuses to start without them.
+
 On first startup the app migrates the database, seeds the 9-agent catalog and the
 demo project `ZNV-001` (Winter Quest — The Lost Snowflake Compass) already parked
 at MANUSCRIPT with an approved architecture doc.
 
-- Dashboard (Blazor Server): http://localhost:5xxx
-- Swagger: http://localhost:5xxx/swagger
+- Dashboard (Blazor Server): http://localhost:5063
+- Login: http://localhost:5063/login
+- Swagger: http://localhost:5063/swagger
 - Health: `/health/live`, `/health/ready`
+
+Anonymous access is limited to `/login`, `/auth/login`, `/auth/logout`, `/health/*`
+and (Development only) `/swagger`. Every other page and every `/api/*` endpoint
+requires an authenticated session.
 
 Without `OPENAI_API_KEY` and Google credentials, everything runs deterministically
 (prompt offline text, no Drive). Set them in `.env` to enable the full AI layer.
@@ -66,9 +76,24 @@ Without `OPENAI_API_KEY` and Google credentials, everything runs deterministical
 ## Deploy
 
 - **docker compose up --build** builds the web service + Postgres (override env
-  values in `docker-compose.yml`).
+  values via a local `.env` — never edit secrets into `docker-compose.yml`).
+- **Koyeb (recommended)**: follow `KOYEB_DEPLOYMENT.md` for the exact service,
+  health-check and environment-variable configuration with Supabase.
 - **Render**: `render.yaml` provides the web service (Docker) and a managed
   `kdpfactory` Postgres database. Set the `sync: false` secrets in the dashboard.
+
+## Security
+
+- All credentials (`DATABASE_URL`, `OPENAI_API_KEY`, `GOOGLE_SERVICE_ACCOUNT_JSON`,
+  `ADMIN_USERNAME`, `ADMIN_PASSWORD`) are environment variables only. A real
+  `.env` is gitignored; `.env.example` holds placeholders.
+- **Rotate `ADMIN_PASSWORD` immediately if it may have been exposed.** An earlier
+  revision of this repository committed a real admin password in
+  `docker-compose.yml` (commit `38551d7`). It was removed from the working tree
+  but still exists in git history — treat that password as compromised, change it
+  in production, and rotate anything else that reused it.
+- Production `DATABASE_URL` connections default to `SslMode=Require`.
+- `/health/live` and `/health/ready` are public but never leak exception details.
 
 ## REST API (highlights)
 

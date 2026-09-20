@@ -3,39 +3,43 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: kdp
-      POSTGRES_PASSWORD: kdp
-      POSTGRES_DB: kdpfactory
+      POSTGRES_USER: ${POSTGRES_USER:-kdp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kdp}
+      POSTGRES_DB: ${POSTGRES_DB:-kdpfactory}
     volumes:
       - kdp_pgdata:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U kdp -d kdpfactory"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-kdp} -d ${POSTGRES_DB:-kdpfactory}"]
       interval: 5s
       timeout: 5s
       retries: 10
 
   web:
     build:
-      context: ..
+      context: .
       dockerfile: src/Zunavio.KdpFactory.Web/Dockerfile
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgres://kdp:kdp@db:5432/kdpfactory
+      DATABASE_URL: ${DATABASE_URL:-postgres://kdp:kdp@db:5432/kdpfactory}
       MIGRATE_ON_STARTUP: "true"
       SEED_DEMO_PROJECT: "true"
       RUN_BACKGROUND_WORKER: "true"
+      # Required: dashboard/API authentication. Values come from the host shell
+      # or a local .env file (see .env.example). NEVER hardcode a real password.
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-change-me}
       # AI agents are optional; set these to enable the LLM layer:
-      # OPENAI_API_KEY: sk-...
-      # OPENAI_MODEL: gpt-4o-mini
-      # GOOGLE_SERVICE_ACCOUNT_JSON: {"type":"service_account",...}
-      # GOOGLE_ROOT_FOLDER_ID: 13ni2nWoQ4V9mxiC0BvPKPMoBgxHEdJvC
-      # GOOGLE_PROMPTS_FOLDER_ID: 1jfwxolnzema4QCE1YYPBDtBKgDphDMIY
-      # GOOGLE_CONTROL_CENTER_SPREADSHEET_ID: 12BNoMgLvZ6tXu16flHAQwwfNeWdaGQsLCaqKCF9N-rA
+      # OPENAI_API_KEY: ${OPENAI_API_KEY}
+      # OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      # GOOGLE_SERVICE_ACCOUNT_JSON: ${GOOGLE_SERVICE_ACCOUNT_JSON}
+      # GOOGLE_ROOT_FOLDER_ID: ${GOOGLE_ROOT_FOLDER_ID}
+      # GOOGLE_PROMPTS_FOLDER_ID: ${GOOGLE_PROMPTS_FOLDER_ID}
+      # GOOGLE_CONTROL_CENTER_SPREADSHEET_ID: ${GOOGLE_CONTROL_CENTER_SPREADSHEET_ID}
     ports:
       - "8080:8080"
 

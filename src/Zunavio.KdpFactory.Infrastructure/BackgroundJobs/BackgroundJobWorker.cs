@@ -33,6 +33,12 @@ public sealed class BackgroundJobWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        if (!_options.CurrentValue.Enabled)
+        {
+            _logger.LogInformation("Background job worker is disabled (RUN_BACKGROUND_WORKER=false); skipping.");
+            return;
+        }
+
         _logger.LogInformation("Background job worker started (poll {Poll}s, lease {Lease}s, max {Max} attempts).",
             _options.CurrentValue.PollIntervalSeconds, _options.CurrentValue.LeaseSeconds, _options.CurrentValue.MaxAttempts);
 

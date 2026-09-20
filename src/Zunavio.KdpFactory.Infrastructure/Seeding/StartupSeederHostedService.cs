@@ -50,6 +50,15 @@ public sealed class StartupSeederHostedService(
         }
         catch (Exception ex)
         {
+            // Production must not silently continue if the database cannot be
+            // (re)initialized: abort so the orchestrator reports a failed deploy.
+            if (environment.IsProduction())
+            {
+                logger.LogCritical(ex,
+                    "Startup database migration/seeding failed in production. Refusing to start the application.");
+                throw;
+            }
+
             logger.LogError(ex, "Startup seeding failed. The application will continue; manual recovery may be needed.");
         }
     }

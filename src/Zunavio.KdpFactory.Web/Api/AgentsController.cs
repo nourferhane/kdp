@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Zunavio.KdpFactory.Application;
 using Zunavio.KdpFactory.Application.Abstractions;
 
 namespace Zunavio.KdpFactory.Web.Api;
 
+[Authorize]
 [ApiController]
 [Route("api/[controller]")]
 public sealed class AgentsController : ControllerBase

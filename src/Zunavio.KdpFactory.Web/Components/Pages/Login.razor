@@ -1,0 +1,62 @@
+@page "/login"
+@attribute [AllowAnonymous]
+@layout Layout.MainLayout
+@inject IOptionsSnapshot<AdminOptions> Admin
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.Extensions.Options
+@using Zunavio.KdpFactory.Infrastructure.Configuration
+@using Microsoft.AspNetCore.Components.Forms
+
+<div style="max-width: 400px; margin: 6vh auto 0;">
+    <div class="card">
+        <div class="card-head">
+            <div>
+                <h2>Zunavio KDP Factory</h2>
+                <div class="sub">Sign in to access the control plane</div>
+            </div>
+        </div>
+        <div class="card-body">
+            @if (!Admin.Value.Enabled)
+            {
+                <div class="alert warn">
+                    Authentication is not configured. Set <code>ADMIN_USERNAME</code> and
+                    <code>ADMIN_PASSWORD</code> environment variables to enable the dashboard.
+                </div>
+            }
+            else if (_error is not null || !string.IsNullOrEmpty(Error))
+            {
+                <div class="alert">@{ if (Error == "invalid") { <text>Invalid username or password.</text> } else { <text>@_error</text> } }</div>
+            }
+
+            @if (Admin.Value.Enabled)
+            {
+                <form method="post" action="/auth/login" class="login-form">
+                    <AntiforgeryToken />
+                    <input type="hidden" name="returnUrl" value="@_returnUrl" />
+                    <label>Username</label>
+                    <input type="text" name="username" autocomplete="username" required autofocus />
+
+                    <label>Password</label>
+                    <input type="password" name="password" autocomplete="current-password" required />
+
+                    <button type="submit" class="btn-primary" style="width: 100%; margin-top: 6px;">Sign in</button>
+                </form>
+
+                <p class="muted small" style="margin-top: 12px; text-align: center;">
+                    Unauthorized access is logged and audited. Credentials come from <code>ADMIN_USERNAME</code> / <code>ADMIN_PASSWORD</code>.
+                </p>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [SupplyParameterFromQuery] private string? ReturnUrl { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    private string _returnUrl = "/";
+    private string? _error;
+
+    protected override void OnInitialized()
+        => _returnUrl = string.IsNullOrWhiteSpace(ReturnUrl) ? "/" : ReturnUrl;
+}

@@ -12,6 +12,8 @@ obj/
 
 ## Local secrets
 .env
+.env.*
+!.env.example
 appsettings.Local.json
 GoogleServiceAccount.json
 

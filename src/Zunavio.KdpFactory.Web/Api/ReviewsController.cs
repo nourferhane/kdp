@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Zunavio.KdpFactory.Application;
 using Zunavio.KdpFactory.Application.HumanReview;
 
@@ -10,6 +11,7 @@ public sealed record ResolutionRequest
     public string? ResolutionPayloadJson { get; init; }
 }
 
+[Authorize]
 [ApiController]
 [Route("api/[controller]")]
 public sealed class ReviewsController : ControllerBase
