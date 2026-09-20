@@ -1,0 +1,100 @@
+@page "/"
+@inject IProjectQueryService Projects
+@inject IOrchestratorService Orchestrator
+
+<h1>Projects</h1>
+
+@if (_busy)
+{
+    <p>Working…</p>
+}
+else
+{
+    <button class="btn-primary" @onclick="CreateDemo">+ New project</button>
+    <button class="btn" @onclick="Load">Refresh</button>
+}
+
+@if (_error is not null)
+{
+    <div class="alert">@_error</div>
+}
+
+<table class="grid">
+    <thead>
+        <tr>
+            <th>Code</th>
+            <th>Title</th>
+            <th>Gate</th>
+            <th>Status</th>
+            <th>Next action</th>
+            <th>Reviews</th>
+            <th>Jobs</th>
+            <th>Updated</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var p in _projects)
+        {
+            <tr>
+                <td><a href="/projects/@p.Id">@p.ProjectCode</a></td>
+                <td>@p.WorkingTitle</td>
+                <td>@p.CurrentGate</td>
+                <td>@p.Status</td>
+                <td>@p.NextAction</td>
+                <td>@p.PendingReviews</td>
+                <td>@(p.HasRunningJobs ? "running" : "idle")</td>
+                <td>@p.UpdatedAt.ToLocalTime():g</td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@if (_projects.Count == 0)
+{
+    <p class="muted">No projects yet. Create one or run the demo seed (see README).</p>
+}
+
+@code {
+    private List<ProjectSummaryDto> _projects = [];
+    private bool _busy;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        _error = null;
+        try
+        {
+            _projects = (await Projects.GetAllAsync(CancellationToken.None)).OrderByDescending(p => p.UpdatedAt).ToList();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task CreateDemo()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var result = await Orchestrator.CreateProjectAsync(new Application.Orchestration.CreateProjectRequest
+            {
+                WorkingTitle = "Untitled",
+                Marketplace = "Amazon.com",
+            }, CancellationToken.None);
+            _error = result.Success ? null : result.Error;
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

@@ -1,0 +1,86 @@
+@page "/settings"
+@inject IOptions<OpenAiOptions> OpenAi
+@inject IOptions<GoogleOptions> Google
+@inject IGoogleConfigurationSettings Gcs
+@inject IGoogleControlCenterSyncService Sync
+@inject IGoogleDriveAgentDefinitionSeeder AgentSeeder
+@using Microsoft.Extensions.Options
+@using Zunavio.KdpFactory.Infrastructure.Configuration
+@using Zunavio.KdpFactory.Application.Abstractions
+@using Zunavio.KdpFactory.Infrastructure.Google
+
+<h1>Settings</h1>
+
+<h2>LLM</h2>
+<ul class="kv">
+    <li>Enabled: @(OpenAi.Value.Enabled ? "yes" : "no")</li>
+    <li>Model: @OpenAi.Value.Model</li>
+</ul>
+@if (!OpenAi.Value.Enabled)
+{
+    <p class="muted">Set OPENAI_API_KEY to enable AI agents (deterministic orchestration still works).</p>
+}
+
+<h2>Google workspace</h2>
+<ul class="kv">
+    <li>Google enabled: @(Gcs.GoogleEnabled ? "yes" : "no")</li>
+    <li>Root folder: @Gcs.RootFolderId</li>
+    <li>Prompts folder: @Gcs.PromptsFolderId</li>
+    <li>Control center sheet: @Gcs.ControlCenterSpreadsheetId</li>
+</ul>
+
+@if (Gcs.GoogleEnabled)
+{
+    <div class="actions">
+        <button class="btn-primary" @onclick="Import">Full import from control center</button>
+        <button class="btn" @onclick="SeedAgents">Discover prompt docs</button>
+    </div>
+
+    @if (_result is not null)
+    {
+        <div class="alert">
+            Added projects @_result.ProjectsAdded, runs @_result.RunsAdded, assets @_result.AssetsAdded
+            @foreach (var e in _result.Errors)
+            {
+                <div>⚠ @e</div>
+            }
+        </div>
+    }
+}
+
+@if (_error is not null)
+{
+    <div class="alert">@_error</div>
+}
+
+<p class="muted">Configuration comes from environment variables (see .env.example). PostgreSQL is the source of truth; the sheet is read for bootstrap imports only.</p>
+
+@code {
+    private ControlCenterImportResult? _result;
+    private string? _error;
+
+    private async Task Import()
+    {
+        try
+        {
+            _result = await Sync.ImportAsync(CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task SeedAgents()
+    {
+        try
+        {
+            _result = null;
+            _error = $"Matched prompt docs: {await AgentSeeder.SeedPromptFileIdsAsync(CancellationToken.None)}";
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+}

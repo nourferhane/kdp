@@ -1,0 +1,74 @@
+@page "/reviews"
+@inject IReviewQueryService Reviews
+@inject IHumanReviewService ReviewService
+@using Zunavio.KdpFactory.Application.HumanReview
+
+<h1>Pending reviews</h1>
+
+@if (_error is not null)
+{
+    <div class="alert">@_error</div>
+}
+
+<table class="grid">
+    <thead>
+        <tr>
+            <th>Project</th>
+            <th>Type</th>
+            <th>Title</th>
+            <th>Description</th>
+            <th>Requested</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var r in _reviews)
+        {
+            <tr>
+                <td>@r.ProjectCode</td>
+                <td>@r.ReviewType</td>
+                <td>@r.Title</td>
+                <td class="wrap">@r.Description</td>
+                <td>@r.RequestedAt.ToLocalTime():g</td>
+                <td>
+                    <button class="btn-primary" @onclick="() => Resolve(r.Id, true)">Approve</button>
+                    <button class="btn-danger" @onclick="() => Resolve(r.Id, false)">Reject</button>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@if (_reviews.Count == 0)
+{
+    <p class="muted">No pending reviews. Gate transitions and agent outputs that need a human will show up here.</p>
+}
+
+@code {
+    private List<ReviewDto> _reviews = [];
+    private string? _error;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        _error = null;
+        try
+        {
+            _reviews = (await Reviews.GetPendingAsync(CancellationToken.None)).ToList();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task Resolve(Guid id, bool approve)
+    {
+        var result = approve
+            ? await ReviewService.ApproveAsync(id, null, null, CancellationToken.None)
+            : await ReviewService.RejectAsync(id, null, CancellationToken.None);
+        _error = result.Success ? null : result.Error;
+        await Load();
+    }
+}

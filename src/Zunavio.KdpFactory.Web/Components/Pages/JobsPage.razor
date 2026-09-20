@@ -1,0 +1,47 @@
+@page "/jobs"
+@inject IJobQueryService Jobs
+
+<h1>Background jobs</h1>
+
+<button class="btn" @onclick="Load">Refresh</button>
+
+<table class="grid">
+    <thead>
+        <tr>
+            <th>Type</th>
+            <th>Status</th>
+            <th>Attempts</th>
+            <th>Available</th>
+            <th>Locked</th>
+            <th>Completed</th>
+            <th>Last error</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var j in _jobs)
+        {
+            <tr>
+                <td>@j.JobType</td>
+                <td>@j.Status</td>
+                <td>@j.Attempts</td>
+                <td>@j.AvailableAt.ToLocalTime():g</td>
+                <td>@(j.LockedAt?.ToLocalTime().ToString("g") ?? "-")</td>
+                <td>@(j.CompletedAt?.ToLocalTime().ToString("g") ?? "-")</td>
+                <td class="wrap">@j.LastError</td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@if (_jobs.Count == 0)
+{
+    <p class="muted">No jobs yet. Agent runs are dispatched as background jobs and consumed by the in-process worker.</p>
+}
+
+@code {
+    private List<JobDto> _jobs = [];
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load() => _jobs = (await Jobs.GetRecentAsync(100, CancellationToken.None)).ToList();
+}

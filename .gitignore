@@ -1,0 +1,25 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+
+## Rider / VS Code / macOS
+.idea/
+.vscode/
+.DS_Store
+
+## Local secrets
+.env
+appsettings.Local.json
+GoogleServiceAccount.json
+
+## Test & coverage
+TestResults/
+coverage/
+*.trx
+*.coverage
+
+## Docker
+docker-compose.override.yml

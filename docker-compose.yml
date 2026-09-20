@@ -1,0 +1,43 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: kdp
+      POSTGRES_PASSWORD: kdp
+      POSTGRES_DB: kdpfactory
+    volumes:
+      - kdp_pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kdp -d kdpfactory"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build:
+      context: ..
+      dockerfile: src/Zunavio.KdpFactory.Web/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://kdp:kdp@db:5432/kdpfactory
+      MIGRATE_ON_STARTUP: "true"
+      SEED_DEMO_PROJECT: "true"
+      RUN_BACKGROUND_WORKER: "true"
+      # AI agents are optional; set these to enable the LLM layer:
+      # OPENAI_API_KEY: sk-...
+      # OPENAI_MODEL: gpt-4o-mini
+      # GOOGLE_SERVICE_ACCOUNT_JSON: {"type":"service_account",...}
+      # GOOGLE_ROOT_FOLDER_ID: 13ni2nWoQ4V9mxiC0BvPKPMoBgxHEdJvC
+      # GOOGLE_PROMPTS_FOLDER_ID: 1jfwxolnzema4QCE1YYPBDtBKgDphDMIY
+      # GOOGLE_CONTROL_CENTER_SPREADSHEET_ID: 12BNoMgLvZ6tXu16flHAQwwfNeWdaGQsLCaqKCF9N-rA
+    ports:
+      - "8080:8080"
+
+volumes:
+  kdp_pgdata:

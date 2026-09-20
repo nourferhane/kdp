@@ -1,0 +1,49 @@
+@page "/agents"
+@inject IAgentDefinitionQueryService Agents
+
+<h1>Agents</h1>
+
+<table class="grid">
+    <thead>
+        <tr>
+            <th>Code</th>
+            <th>Name</th>
+            <th>Enabled</th>
+            <th>Prompt version</th>
+            <th>Prompt doc</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var a in _agents)
+        {
+            <tr>
+                <td>@a.Code</td>
+                <td>@a.Name</td>
+                <td>@a.Enabled</td>
+                <td>@a.PromptVersion</td>
+                <td>
+                    @if (a.PromptDriveFileId is not null)
+                    {
+                        <a href="https://docs.google.com/document/d/@a.PromptDriveFileId/edit" target="_blank" rel="noopener">open ↗</a>
+                    }
+                    else
+                    {
+                        <span class="muted">offline</span>
+                    }
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@if (_agents.Count == 0)
+{
+    <p class="muted">No agent definitions seeded. The startup seeder creates the catalog on first run.</p>
+}
+
+@code {
+    private List<AgentDefinitionDto> _agents = [];
+
+    protected override async Task OnInitializedAsync()
+        => _agents = (await Agents.GetAllAsync(CancellationToken.None)).OrderBy(a => a.Code).ToList();
+}

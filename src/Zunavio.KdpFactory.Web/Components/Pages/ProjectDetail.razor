@@ -1,0 +1,105 @@
+@page "/projects/{Id:guid}"
+@inject IProjectQueryService Projects
+@inject IOrchestratorService Orchestrator
+@inject IReviewQueryService Reviews
+
+<h1>@(_project?.WorkingTitle ?? "Project")</h1>
+
+@if (_project is null && _error is null)
+{
+    <p>Loading…</p>
+}
+
+@if (_error is not null)
+{
+    <div class="alert">@_error</div>
+}
+
+@if (_project is not null)
+{
+    <div class="meta">
+        <span>@_project.ProjectCode</span>
+        <span>Gate: <b>@_project.CurrentGate</b></span>
+        <span>Status: @_project.Status</span>
+        <span>Next: @_project.NextAction</span>
+        <span>Score: @(_project.MarketScore?.ToString() ?? "-")</span>
+    </div>
+
+    <div class="actions">
+        <button class="btn-primary" @onclick="() => Run(async () => await Orchestrator.RunNextAsync(_project.Id, CancellationToken.None), _project.Id)">Run next agent</button>
+        <button class="btn-primary" @onclick="() => Run(async () => await Orchestrator.ContinueAsync(_project.Id, CancellationToken.None), _project.Id)">Continue</button>
+        <button class="btn" @onclick="() => Run(async () => await Orchestrator.PauseAsync(_project.Id, CancellationToken.None), _project.Id)">Pause</button>
+        <button class="btn" @onclick="() => Run(async () => await Orchestrator.ResumeAsync(_project.Id, CancellationToken.None), _project.Id)">Resume</button>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_project.DriveFolderUrl))
+    {
+        <p><a href="@_project.DriveFolderUrl" target="_blank" rel="noopener">Drive folder ↗</a></p>
+    }
+
+    <ul class="kv">
+        <li>Marketplace: @_project.Marketplace</li>
+        <li>Language: @_project.Language</li>
+        <li>Target age: @_project.TargetAge</li>
+        <li>Book type: @_project.BookType</li>
+        <li>Season: @_project.Season</li>
+        <li>Manuscript: @_project.CurrentManuscriptVersion</li>
+        <li>Visual bible: @_project.CurrentVisualBibleVersion</li>
+        <li>Production: @_project.CurrentProductionVersion</li>
+    </ul>
+
+    <h2>Reviews</h2>
+    <table class="grid">
+        <thead>
+            <tr><th>Type</th><th>Title</th><th>Status</th><th>Requested</th><th></th></tr>
+        </thead>
+        <tbody>
+            @foreach (var r in _reviews)
+            {
+                <tr>
+                    <td>@r.ReviewType</td>
+                    <td>@r.Title</td>
+                    <td>@r.Status</td>
+                    <td>@r.RequestedAt.ToLocalTime():g</td>
+                    <td>
+                        @if (r.Status == HumanReviewStatus.Pending)
+                        {
+                            <a href="/reviews">Review ↗</a>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private ProjectDetailDto? _project;
+    private List<ReviewDto> _reviews = [];
+    private string? _error;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        _error = null;
+        try
+        {
+            _project = await Projects.GetAsync(Id, CancellationToken.None);
+            _reviews = _project is null ? [] : (await Reviews.GetByProjectAsync(Id, CancellationToken.None)).ToList();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task Run(Func<Task<Application.Orchestration.OrchestratorOperationResult>> operation, Guid id)
+    {
+        var result = await operation();
+        _error = result.Success ? result.Message : result.Error;
+        await Load();
+    }
+}

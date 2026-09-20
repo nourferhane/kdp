@@ -1,0 +1,19 @@
+@inherits LayoutComponentBase
+
+<div class="shell">
+    <header class="topbar">
+        <a href="/" class="brand">ZUNAVIO · KDP Factory</a>
+        <nav class="nav">
+            <NavLink class="navlink" href="/" Match="NavLinkMatch.All">Projects</NavLink>
+            <NavLink class="navlink" href="/agents">Agents</NavLink>
+            <NavLink class="navlink" href="/reviews">Reviews</NavLink>
+            <NavLink class="navlink" href="/jobs">Jobs</NavLink>
+            <NavLink class="navlink" href="/settings">Settings</NavLink>
+        </nav>
+        <span class="grow"></span>
+        <span class="status-dot" title="Control plane & background worker are running in-process"></span>
+    </header>
+    <main class="content">
+        @Body
+    </main>
+</div>
