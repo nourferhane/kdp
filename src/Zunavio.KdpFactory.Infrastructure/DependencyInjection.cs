@@ -6,8 +6,10 @@ using Microsoft.Extensions.Options;
 using Npgsql;
 using Zunavio.KdpFactory.Application.Abstractions;
 using Zunavio.KdpFactory.Infrastructure.Agents;
+using Zunavio.KdpFactory.Infrastructure.Ai;
 using Zunavio.KdpFactory.Infrastructure.BackgroundJobs;
 using Zunavio.KdpFactory.Infrastructure.Configuration;
+using Zunavio.KdpFactory.Infrastructure.Gemini;
 using Zunavio.KdpFactory.Infrastructure.Google;
 using Zunavio.KdpFactory.Infrastructure.OpenAi;
 using Zunavio.KdpFactory.Infrastructure.Persistence;
@@ -21,11 +23,24 @@ public static class DependencyInjection
 public static IServiceCollection AddKdpInfrastructure(this IServiceCollection services, IConfiguration configuration, IHostEnvironment? environment = null)
 {
         // ---- Options (from env vars via appsettings / secrets) ----
+        services.Configure<AiProviderOptions>(o =>
+        {
+            o.Provider = configuration[KdpSettings.AiProviderEnvKey] ?? "OpenAI";
+        });
+
         services.Configure<OpenAiOptions>(o =>
         {
             o.ApiKey = configuration[KdpSettings.OpenAiApiKeyEnvKey] ?? string.Empty;
             o.Model = configuration[KdpSettings.OpenAiModelEnvKey] ?? "gpt-4o-mini";
             o.BaseUrl = configuration[KdpSettings.OpenAiBaseEnvKey];
+            o.Enabled = !string.IsNullOrWhiteSpace(o.ApiKey);
+        });
+
+        services.Configure<GeminiOptions>(o =>
+        {
+            o.ApiKey = configuration[KdpSettings.GeminiApiKeyEnvKey] ?? string.Empty;
+            o.Model = configuration[KdpSettings.GeminiModelEnvKey] ?? "gemini-3.8-flash";
+            o.BaseUrl = configuration[KdpSettings.GeminiBaseEnvKey] ?? "https://generativelanguage.googleapis.com";
             o.Enabled = !string.IsNullOrWhiteSpace(o.ApiKey);
         });
 
@@ -69,8 +84,10 @@ public static IServiceCollection AddKdpInfrastructure(this IServiceCollection se
         services.AddScoped<IUnitOfWork, KdpUnitOfWork>();
         services.AddScoped<IFactorySettingsProvider, FactorySettingsProvider>();
 
-        // ---- OpenAI ----
-        services.AddSingleton<ILanguageModelClient, OpenAiLanguageModelClient>();
+        // ---- Language model providers ----
+        services.AddSingleton<OpenAiLanguageModelClient>();
+        services.AddSingleton<GeminiLanguageModelClient>();
+        services.AddSingleton<ILanguageModelClient, ProviderLanguageModelClient>();
 
         // ---- Google ----
         services.AddSingleton<IGoogleCredentialProvider, GoogleCredentialProvider>();
