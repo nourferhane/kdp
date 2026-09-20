@@ -55,7 +55,7 @@ public sealed class OpenAiOptions
 public sealed class GeminiOptions
 {
     public string ApiKey { get; set; } = string.Empty;
-    public string Model { get; set; } = "gemini-3.8-flash";
+    public string Model { get; set; } = "gemini-2.5-flash";
     public string BaseUrl { get; set; } = "https://generativelanguage.googleapis.com";
     public double? PricePerMillionInput { get; set; }
     public double? PricePerMillionOutput { get; set; }
