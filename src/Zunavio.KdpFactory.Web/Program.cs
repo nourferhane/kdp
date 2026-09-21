@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Http.Json;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Options;
+using ModelContextProtocol.AspNetCore;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -62,6 +63,11 @@ builder.Services.AddAuthorization(o =>
         .Build();
 });
 builder.Services.AddCascadingAuthenticationState();
+
+// ---- MCP ----
+builder.Services.AddMcpServer()
+    .WithHttpTransport(o => o.SessionMode = HttpServerSessionMode.Stateless)
+    .WithToolsFromAssembly();
 
 // ---- REST API ----
 builder.Services.AddControllers();
@@ -155,6 +161,7 @@ app.MapPost("/auth/logout", async (HttpContext ctx) =>
 });
 
 app.MapControllers();
+app.MapMcp("/mcp");
 
 app.MapRazorComponents<Zunavio.KdpFactory.Web.Components.App>()
     .AddInteractiveServerRenderMode();
