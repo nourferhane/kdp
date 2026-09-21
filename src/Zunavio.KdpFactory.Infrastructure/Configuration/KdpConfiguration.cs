@@ -21,6 +21,9 @@ public static class KdpSettings
 
     public const string GoogleServiceAccountJsonEnvKey = "GOOGLE_SERVICE_ACCOUNT_JSON";
     public const string GoogleApplicationCredentialsEnvKey = "GOOGLE_APPLICATION_CREDENTIALS";
+    public const string GoogleOAuthClientIdEnvKey = "GOOGLE_OAUTH_CLIENT_ID";
+    public const string GoogleOAuthClientSecretEnvKey = "GOOGLE_OAUTH_CLIENT_SECRET";
+    public const string GoogleOAuthRefreshTokenEnvKey = "GOOGLE_OAUTH_REFRESH_TOKEN";
     public const string GoogleRootFolderIdKey = "GOOGLE_ROOT_FOLDER_ID";
     public const string GooglePromptsFolderIdKey = "GOOGLE_PROMPTS_FOLDER_ID";
     public const string GoogleControlCenterSpreadsheetIdKey = "GOOGLE_CONTROL_CENTER_SPREADSHEET_ID";
@@ -68,13 +71,22 @@ public sealed class GoogleOptions
 {
     public string? ServiceAccountJson { get; set; }
     public string? ApplicationCredentialsPath { get; set; }
+    public string? OAuthClientId { get; set; }
+    public string? OAuthClientSecret { get; set; }
+    public string? OAuthRefreshToken { get; set; }
     public string? RootFolderId { get; set; }
     public string? PromptsFolderId { get; set; }
     public string? ControlCenterSpreadsheetId { get; set; }
     public string? ProjectFolderId { get; set; }
     public string? ArchitectureDocId { get; set; }
 
+    public bool HasOAuth =>
+        !string.IsNullOrWhiteSpace(OAuthClientId) &&
+        !string.IsNullOrWhiteSpace(OAuthClientSecret) &&
+        !string.IsNullOrWhiteSpace(OAuthRefreshToken);
+
     public bool IsConfigured =>
+        HasOAuth ||
         !string.IsNullOrWhiteSpace(ServiceAccountJson) ||
         !string.IsNullOrWhiteSpace(ApplicationCredentialsPath);
 
