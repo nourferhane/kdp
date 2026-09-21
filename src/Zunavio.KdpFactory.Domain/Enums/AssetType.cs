@@ -14,4 +14,5 @@ public enum AssetType
     Epub = 9,
     QaReport = 10,
     Metadata = 11,
+    Illustration = 12,
 }
