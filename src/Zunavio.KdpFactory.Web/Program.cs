@@ -162,7 +162,9 @@ app.MapPost("/auth/logout", async (HttpContext ctx) =>
 });
 
 app.MapControllers();
-// ChatGPT connector discovery must reach the MCP transport without the dashboard cookie.\n// Write/upload REST endpoints remain separately protected by their API-key controller.\napp.MapMcp("/mcp").AllowAnonymous();
+// ChatGPT connector discovery must reach the MCP transport without the dashboard cookie.
+// Write/upload REST endpoints remain separately protected by their API-key controller.
+app.MapMcp("/mcp").AllowAnonymous();
 
 app.MapRazorComponents<Zunavio.KdpFactory.Web.Components.App>()
     .AddInteractiveServerRenderMode();
