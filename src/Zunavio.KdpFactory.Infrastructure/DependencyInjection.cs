@@ -89,6 +89,10 @@ public static IServiceCollection AddKdpInfrastructure(this IServiceCollection se
 
         // ---- Language model providers ----
         services.AddSingleton<OpenAiLanguageModelClient>();
+        services.AddHttpClient<IVisualGenerationService, OpenAiVisualGenerationService>(client =>
+        {
+            client.Timeout = TimeSpan.FromMinutes(5);
+        });
         services.AddSingleton<GeminiLanguageModelClient>();
         services.AddSingleton<ILanguageModelClient, ProviderLanguageModelClient>();
 
