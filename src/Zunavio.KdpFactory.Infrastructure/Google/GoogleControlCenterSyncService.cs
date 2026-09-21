@@ -48,7 +48,7 @@ public sealed class GoogleControlCenterSyncService : IGoogleControlCenterSyncSer
     private static readonly string[] AssetsHeaders =
     [
         "assetId", "assetCode", "projectCode", "assetType", "version", "status",
-        "qaStatus", "driveUrl", "createdByRunCode", "createdAtUtc",
+        "qaStatus", "driveUrl", "createdByRunCode", "createdAtUtc", "driveFileId", "contentJson",
     ];
 
     private static readonly string[] GatesHeaders = ["order", "gate", "agent"];
@@ -372,6 +372,8 @@ public sealed class GoogleControlCenterSyncService : IGoogleControlCenterSyncSer
             asset.DriveUrl,
             null,
             asset.CreatedAt.ToUniversalTime().ToString("O"),
+            asset.DriveFileId,
+            asset.ContentJson,
         };
 
         if (asset.CreatedByAgentRunId is not null)
