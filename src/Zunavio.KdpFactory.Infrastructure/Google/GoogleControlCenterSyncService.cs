@@ -286,10 +286,10 @@ public sealed class GoogleControlCenterSyncService : IGoogleControlCenterSyncSer
                     Version = Value(row, header, "version") ?? "v1.0",
                     Status = Parse<Domain.Enums.AssetStatus>(Value(row, header, "status")) ?? Domain.Enums.AssetStatus.Draft,
                     QaStatus = Parse<Domain.Enums.AssetQaStatus>(Value(row, header, "qaStatus")) ?? Domain.Enums.AssetQaStatus.NotChecked,
-                    DriveFileId = ParseDriveIdFromUrl(Value(row, header, "driveUrl")),
+                    DriveFileId = Value(row, header, "driveFileId") ?? ParseDriveIdFromUrl(Value(row, header, "driveUrl")),
                     DriveUrl = Value(row, header, "driveUrl"),
                     CreatedByAgentRunId = run?.Id,
-                    ContentJson = "{}",
+                    ContentJson = Value(row, header, "contentJson") ?? "{}",
                     CreatedAt = DateTime.UtcNow,
                 }, ct);
 
