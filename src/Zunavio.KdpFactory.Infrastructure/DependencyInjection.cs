@@ -48,6 +48,9 @@ public static IServiceCollection AddKdpInfrastructure(this IServiceCollection se
         {
             o.ServiceAccountJson = configuration[KdpSettings.GoogleServiceAccountJsonEnvKey];
             o.ApplicationCredentialsPath = configuration[KdpSettings.GoogleApplicationCredentialsEnvKey];
+            o.OAuthClientId = configuration[KdpSettings.GoogleOAuthClientIdEnvKey];
+            o.OAuthClientSecret = configuration[KdpSettings.GoogleOAuthClientSecretEnvKey];
+            o.OAuthRefreshToken = configuration[KdpSettings.GoogleOAuthRefreshTokenEnvKey];
             o.RootFolderId = configuration[KdpSettings.GoogleRootFolderIdKey];
             o.PromptsFolderId = configuration[KdpSettings.GooglePromptsFolderIdKey];
             o.ControlCenterSpreadsheetId = configuration[KdpSettings.GoogleControlCenterSpreadsheetIdKey];
