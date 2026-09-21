@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using Google.Apis.Drive.v3;
+using Google;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Zunavio.KdpFactory.Application.Abstractions;
@@ -76,11 +77,53 @@ public sealed class AssetUploadController : ControllerBase
 
         var request = _google.Drive.Files.Create(metadata, buffered, mime);
         request.Fields = "id,name,mimeType,size,parents,webViewLink,createdTime";
-        await request.UploadAsync(ct);
-        var uploaded = request.ResponseBody;
 
-        if (uploaded?.Id is null)
-            return StatusCode(502, new { success = false, error = "drive_upload_failed" });
+        DriveFile? uploaded;
+        try
+        {
+            var progress = await request.UploadAsync(ct);
+            uploaded = request.ResponseBody;
+
+            if (progress.Status != Google.Apis.Upload.UploadStatus.Completed || uploaded?.Id is null)
+            {
+                var uploadError = progress.Exception;
+                _logger.LogError(uploadError,
+                    "Drive upload did not complete. Status={UploadStatus}; Message={Message}",
+                    progress.Status,
+                    uploadError?.Message);
+
+                return StatusCode(502, new
+                {
+                    success = false,
+                    error = "drive_upload_failed",
+                    uploadStatus = progress.Status.ToString(),
+                    googleStatus = (uploadError as GoogleApiException)?.HttpStatusCode.ToString(),
+                    googleMessage = uploadError?.Message
+                });
+            }
+        }
+        catch (GoogleApiException ex)
+        {
+            _logger.LogError(ex, "Google Drive API rejected asset upload.");
+            return StatusCode(502, new
+            {
+                success = false,
+                error = "drive_upload_failed",
+                googleStatus = ex.HttpStatusCode.ToString(),
+                googleMessage = ex.Message
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected Drive asset upload failure.");
+            return StatusCode(502, new
+            {
+                success = false,
+                error = "drive_upload_failed",
+                exceptionType = ex.GetType().Name,
+                message = ex.Message
+            });
+        }
 
         // Read back from Drive: an asset only counts after this verification.
         var verifyRequest = _google.Drive.Files.Get(uploaded.Id);
