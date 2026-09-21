@@ -1,4 +1,7 @@
 using System.Security.Cryptography;
+using System.Text.Json;
+using Zunavio.KdpFactory.Domain.Entities;
+using Zunavio.KdpFactory.Domain.Enums;
 using Google.Apis.Drive.v3;
 using Google;
 using Microsoft.AspNetCore.Authorization;
@@ -17,17 +20,23 @@ public sealed class AssetUploadController : ControllerBase
     private readonly IArtifactStorage _storage;
     private readonly IGoogleCredentialProvider _google;
     private readonly IConfiguration _configuration;
+    private readonly IUnitOfWork _db;
+    private readonly IGoogleControlCenterSyncService _controlCenter;
     private readonly ILogger<AssetUploadController> _logger;
 
     public AssetUploadController(
         IArtifactStorage storage,
         IGoogleCredentialProvider google,
         IConfiguration configuration,
+        IUnitOfWork db,
+        IGoogleControlCenterSyncService controlCenter,
         ILogger<AssetUploadController> logger)
     {
         _storage = storage;
         _google = google;
         _configuration = configuration;
+        _db = db;
+        _controlCenter = controlCenter;
         _logger = logger;
     }
 
@@ -66,6 +75,50 @@ public sealed class AssetUploadController : ControllerBase
         var bytes = buffered.ToArray();
         var sha256 = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
         buffered.Position = 0;
+
+        // Idempotency: one canonical Drive file per project/page (or filename when no page).
+        var existingDriveFile = await FindExistingFileAsync(generatedFolderId, safeName, ct);
+        if (existingDriveFile is not null)
+        {
+            var existingRequest = _google.Drive.Files.Get(existingDriveFile.Id);
+            existingRequest.Fields = "id,name,mimeType,size,parents,webViewLink,description,trashed";
+            var existing = await existingRequest.ExecuteAsync(ct);
+            if (existing.Trashed != true && existing.Description?.Contains($"sha256={sha256}", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                await RegisterAssetAsync(projectCode.Trim(), pageNumber, existing, sha256, file.Length, ct);
+                return Ok(new
+                {
+                    success = true, verified = true, idempotent = true,
+                    projectId = projectCode.Trim(), pageNumber, fileName = existing.Name,
+                    driveFileId = existing.Id, driveUrl = existing.WebViewLink,
+                    folderId = generatedFolderId, mimeType = existing.MimeType,
+                    size = existing.Size ?? file.Length, sha256
+                });
+            }
+
+            // Same logical page, different bytes: replace the canonical file rather than create a duplicate.
+            var update = _google.Drive.Files.Update(new DriveFile
+            {
+                Name = safeName,
+                MimeType = mime,
+                Description = $"Zunavio asset; project={projectCode.Trim()}; page={pageNumber?.ToString() ?? "n/a"}; sha256={sha256}"
+            }, existingDriveFile.Id, buffered, mime);
+            update.Fields = "id,name,mimeType,size,parents,webViewLink,createdTime,description";
+            var updateProgress = await update.UploadAsync(ct);
+            if (updateProgress.Status != Google.Apis.Upload.UploadStatus.Completed || update.ResponseBody?.Id is null)
+                return StatusCode(502, new { success = false, error = "drive_update_failed", message = updateProgress.Exception?.Message });
+
+            var replaced = update.ResponseBody;
+            await RegisterAssetAsync(projectCode.Trim(), pageNumber, replaced, sha256, file.Length, ct);
+            return Ok(new
+            {
+                success = true, verified = true, idempotent = false, replaced = true,
+                projectId = projectCode.Trim(), pageNumber, fileName = replaced.Name,
+                driveFileId = replaced.Id, driveUrl = replaced.WebViewLink,
+                folderId = generatedFolderId, mimeType = replaced.MimeType,
+                size = replaced.Size ?? file.Length, sha256
+            });
+        }
 
         var metadata = new DriveFile
         {
@@ -142,6 +195,8 @@ public sealed class AssetUploadController : ControllerBase
             return StatusCode(502, new { success = false, error = "drive_verification_failed", driveFileId = uploaded.Id });
         }
 
+        await RegisterAssetAsync(projectCode.Trim(), pageNumber, verified, sha256, file.Length, ct);
+
         return Ok(new
         {
             success = true,
@@ -178,6 +233,57 @@ public sealed class AssetUploadController : ControllerBase
             size = file.Size,
             driveUrl = file.WebViewLink
         });
+    }
+
+    private async Task<DriveFile?> FindExistingFileAsync(string parentId, string fileName, CancellationToken ct)
+    {
+        var list = _google.Drive.Files.List();
+        list.Q = $"'{Escape(parentId)}' in parents and name='{Escape(fileName)}' and trashed=false";
+        list.PageSize = 1;
+        list.Fields = "files(id,name)";
+        return (await list.ExecuteAsync(ct)).Files?.FirstOrDefault();
+    }
+
+    private async Task RegisterAssetAsync(string projectCode, int? pageNumber, DriveFile file, string sha256, long size, CancellationToken ct)
+    {
+        var project = await _db.Projects.GetByCodeAsync(projectCode, ct);
+        if (project is null)
+        {
+            _logger.LogWarning("Drive image {DriveFileId} verified, but project {ProjectCode} is not present in PostgreSQL; Assets registration skipped.", file.Id, projectCode);
+            return;
+        }
+
+        var assetCode = pageNumber is > 0 ? $"{projectCode}-IMG-{pageNumber:000}" : $"{projectCode}-IMG-{file.Id}";
+        var asset = await _db.Assets.GetByCodeAsync(assetCode, ct);
+        if (asset is null)
+        {
+            asset = new Asset
+            {
+                AssetCode = assetCode,
+                ProjectId = project.Id,
+                AssetType = AssetType.Illustration,
+                Version = "v1.0",
+                Status = AssetStatus.Draft,
+                QaStatus = AssetQaStatus.NotChecked,
+                DriveFileId = file.Id,
+                DriveUrl = file.WebViewLink ?? $"https://drive.google.com/file/d/{file.Id}/view",
+                ContentJson = JsonSerializer.Serialize(new { pageNumber, sha256, size, mimeType = file.MimeType, verified = true }),
+                Notes = "Verified physical image asset uploaded through Zunavio gateway.",
+                CreatedAt = DateTime.UtcNow
+            };
+            await _db.Assets.AddAsync(asset, ct);
+        }
+        else
+        {
+            asset.DriveFileId = file.Id;
+            asset.DriveUrl = file.WebViewLink ?? $"https://drive.google.com/file/d/{file.Id}/view";
+            asset.ContentJson = JsonSerializer.Serialize(new { pageNumber, sha256, size, mimeType = file.MimeType, verified = true });
+            asset.Status = AssetStatus.Draft;
+            asset.QaStatus = AssetQaStatus.NotChecked;
+        }
+
+        await _db.SaveChangesAsync(ct);
+        await _controlCenter.SyncProjectAsync(project.Id, ct);
     }
 
     private bool IsAuthorized()
