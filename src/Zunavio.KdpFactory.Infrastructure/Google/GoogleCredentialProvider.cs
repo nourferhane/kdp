@@ -3,6 +3,8 @@ using Google.Apis.Auth.OAuth2;
 using Google.Apis.Docs.v1;
 using Google.Apis.Drive.v3;
 using Google.Apis.Http;
+using Google.Apis.Auth.OAuth2.Flows;
+using Google.Apis.Auth.OAuth2.Responses;
 using Google.Apis.Sheets.v4;
 using Google.Apis.Util;
 using Microsoft.Extensions.Options;
@@ -48,11 +50,7 @@ public sealed class GoogleCredentialProvider : IGoogleCredentialProvider
     {
         _options = options.Value;
         _credential = new Lazy<GoogleCredential>(CreateCredential);
-        _initializer = new Lazy<IConfigurableHttpClientInitializer>(() =>
-        {
-            var credential = Credential;
-            return credential.CreateScoped(Scopes);
-        });
+        _initializer = new Lazy<IConfigurableHttpClientInitializer>(CreateInitializer);
     }
 
     public bool IsConfigured => _options.IsConfigured;
@@ -64,8 +62,13 @@ public sealed class GoogleCredentialProvider : IGoogleCredentialProvider
             if (!_options.IsConfigured)
             {
                 throw new GoogleNotConfiguredException(
-                    "Google integration is not configured. Set 'GOOGLE_SERVICE_ACCOUNT_JSON' " +
-                    "(or 'GOOGLE_APPLICATION_CREDENTIALS') and the drive/sheet IDs.");
+                    "Google integration is not configured. Configure OAuth or service-account credentials and the drive/sheet IDs.");
+            }
+
+            if (_options.HasOAuth)
+            {
+                throw new GoogleNotConfiguredException(
+                    "GoogleCredential is not exposed when OAuth user credentials are active; use Initializer/Drive/Docs/Sheets.");
             }
 
             return _credential.Value;
@@ -91,6 +94,29 @@ public sealed class GoogleCredentialProvider : IGoogleCredentialProvider
         HttpClientInitializer = Initializer,
         ApplicationName = ApplicationName,
     });
+
+    private IConfigurableHttpClientInitializer CreateInitializer()
+    {
+        if (_options.HasOAuth)
+        {
+            var flow = new GoogleAuthorizationCodeFlow(new GoogleAuthorizationCodeFlow.Initializer
+            {
+                ClientSecrets = new ClientSecrets
+                {
+                    ClientId = _options.OAuthClientId,
+                    ClientSecret = _options.OAuthClientSecret
+                },
+                Scopes = Scopes
+            });
+
+            return new UserCredential(
+                flow,
+                "zunavio-factory",
+                new TokenResponse { RefreshToken = _options.OAuthRefreshToken });
+        }
+
+        return Credential.CreateScoped(Scopes);
+    }
 
     private GoogleCredential CreateCredential()
     {
