@@ -90,8 +90,8 @@ public sealed class AssetUploadController : ControllerBase
         var verifiedOk = verified.Id == uploaded.Id
             && verified.Trashed != true
             && verified.Parents?.Contains(generatedFolderId) == true
-            && long.TryParse(verified.Size, out var driveSize)
-            && driveSize == file.Length;
+            && verified.Size.HasValue
+            && verified.Size.Value == file.Length;
 
         if (!verifiedOk)
         {
