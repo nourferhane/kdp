@@ -110,7 +110,7 @@ public sealed class AssetUploadController : ControllerBase
             driveUrl = verified.WebViewLink ?? $"https://drive.google.com/file/d/{verified.Id}/view",
             folderId = generatedFolderId,
             mimeType = verified.MimeType,
-            size = driveSize,
+            size = verified.Size!.Value,
             sha256
         });
     }
