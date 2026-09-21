@@ -148,7 +148,7 @@ public sealed class OpenAiVisualGenerationService(
             }, stream, "image/png");
             create.Fields = "id,name,mimeType,size,parents,webViewLink,description,trashed";
             var progress = await create.UploadAsync(ct);
-            if (progress.Status != Google.Apis.Upload.UploadStatus.Completed || create.ResponseBody?.Id is null)
+            if (progress.Status != global::Google.Apis.Upload.UploadStatus.Completed || create.ResponseBody?.Id is null)
                 throw new InvalidOperationException($"Google Drive upload failed: {progress.Exception?.Message ?? progress.Status.ToString()}");
             saved = create.ResponseBody;
         }
@@ -162,7 +162,7 @@ public sealed class OpenAiVisualGenerationService(
             }, existingDrive.Id, stream, "image/png");
             update.Fields = "id,name,mimeType,size,parents,webViewLink,description,trashed";
             var progress = await update.UploadAsync(ct);
-            if (progress.Status != Google.Apis.Upload.UploadStatus.Completed || update.ResponseBody?.Id is null)
+            if (progress.Status != global::Google.Apis.Upload.UploadStatus.Completed || update.ResponseBody?.Id is null)
                 throw new InvalidOperationException($"Google Drive update failed: {progress.Exception?.Message ?? progress.Status.ToString()}");
             saved = update.ResponseBody;
         }
