@@ -110,6 +110,30 @@ app.UseStaticFiles();
 app.UseHttpsRedirection();
 app.UseAntiforgery();
 app.UseAuthentication();
+
+// MCP clients may authenticate with the same secret already provisioned for the
+// asset gateway. This keeps the MCP endpoint private without requiring a browser cookie.
+app.Use(async (ctx, next) =>
+{
+    if (ctx.Request.Path.StartsWithSegments("/mcp"))
+    {
+        var expected = builder.Configuration["ASSET_UPLOAD_API_KEY"];
+        var authorization = ctx.Request.Headers.Authorization.ToString();
+        const string prefix = "Bearer ";
+        if (!string.IsNullOrWhiteSpace(expected)
+            && authorization.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+            && SecureEquals(authorization[prefix.Length..].Trim(), expected))
+        {
+            var identity = new ClaimsIdentity(
+                [new Claim(ClaimTypes.Name, "zunavio-mcp")],
+                "ZunavioMcpBearer");
+            ctx.User = new ClaimsPrincipal(identity);
+        }
+    }
+
+    await next();
+});
+
 app.UseAuthorization();
 
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false }).AllowAnonymous();
