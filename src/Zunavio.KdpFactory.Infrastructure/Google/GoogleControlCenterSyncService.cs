@@ -115,6 +115,17 @@ public sealed class GoogleControlCenterSyncService : IGoogleControlCenterSyncSer
 
         try
         {
+            // Older Control Centers use Project_ID/Asset_ID columns. Never rewrite
+            // their headers or positional data with the newer PostgreSQL schema.
+            var headerRequest = _credentials.Sheets.Spreadsheets.Values.Get(
+                _options.ControlCenterSpreadsheetId, "Projects!A1");
+            var header = await headerRequest.ExecuteAsync(ct);
+            if (header.Values?.FirstOrDefault()?.FirstOrDefault()?.ToString() == "Project_ID")
+            {
+                await SyncLegacyAssetsAsync(project, ct);
+                return;
+            }
+
             await EnsureTabsAsync(_credentials.Sheets, ct);
             await WriteProjectRowAsync(project, ct);
 
@@ -138,6 +149,38 @@ public sealed class GoogleControlCenterSyncService : IGoogleControlCenterSyncSer
     public Task SyncAgentRunAsync(Guid runId, CancellationToken ct) => Task.CompletedTask;
 
     public Task SyncAssetAsync(Guid assetId, CancellationToken ct) => Task.CompletedTask;
+
+    private async Task SyncLegacyAssetsAsync(Domain.Entities.Project project, CancellationToken ct)
+    {
+        var sheets = _credentials.Sheets;
+        var response = await sheets.Spreadsheets.Values.Get(
+            _options.ControlCenterSpreadsheetId, "Assets!A:I").ExecuteAsync(ct);
+        var rows = response.Values ?? [];
+        if (rows.Count == 0 || rows[0].Count < 8 || rows[0][0]?.ToString() != "Asset_ID"
+            || rows[0][4]?.ToString() != "Drive_URL")
+            throw new InvalidOperationException("Unexpected legacy Assets schema; refusing to write.");
+
+        foreach (var asset in await _db.Assets.GetByProjectAsync(project.Id, ct))
+        {
+            // Only add verified gateway uploads. Leave all existing legacy rows untouched.
+            if (asset.AssetType != Domain.Enums.AssetType.Illustration || string.IsNullOrWhiteSpace(asset.DriveFileId))
+                continue;
+            if (rows.Skip(1).Any(row => row.Count > 0 && row[0]?.ToString() == asset.AssetCode))
+                continue;
+
+            var values = new object?[] { asset.AssetCode, project.ProjectCode, "ILLUSTRATION",
+                asset.Version, asset.DriveUrl, asset.Status.ToString().ToUpperInvariant(),
+                "IMAGE_GENERATION", asset.QaStatus.ToString().ToUpperInvariant(),
+                asset.CreatedAt.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss") };
+            var append = sheets.Spreadsheets.Values.Append(new ValueRange
+            {
+                Values = [values.ToList()]
+            }, _options.ControlCenterSpreadsheetId, "Assets!A:I");
+            append.ValueInputOption = SpreadsheetsResource.ValuesResource.AppendRequest.ValueInputOptionEnum.RAW;
+            append.InsertDataOption = SpreadsheetsResource.ValuesResource.AppendRequest.InsertDataOptionEnum.INSERTROWS;
+            await append.ExecuteAsync(ct);
+        }
+    }
 
     private async Task<ControlCenterImportResult> ImportProjectsAsync(
         SheetsService sheets, ControlCenterImportResult result, CancellationToken ct)

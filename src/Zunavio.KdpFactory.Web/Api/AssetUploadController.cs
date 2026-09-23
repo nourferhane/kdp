@@ -62,9 +62,24 @@ public sealed class AssetUploadController : ControllerBase
         if (mime is not ("image/png" or "image/jpeg" or "image/webp"))
             return BadRequest(new { success = false, error = "unsupported_media_type" });
 
-        var project = await _storage.EnsureProjectFoldersAsync(projectCode.Trim(), ct);
-        if (!project.SubFolders.TryGetValue("05_VISUALS", out var visualsFolderId))
-            return StatusCode(500, new { success = false, error = "visuals_folder_missing" });
+        var registeredProject = await _db.Projects.GetByCodeAsync(projectCode.Trim(), ct);
+        string visualsFolderId;
+        if (!string.IsNullOrWhiteSpace(registeredProject?.DriveFolderId))
+        {
+            var folderRequest = _google.Drive.Files.Get(registeredProject.DriveFolderId);
+            folderRequest.Fields = "id,mimeType,trashed";
+            var folder = await folderRequest.ExecuteAsync(ct);
+            if (folder.Trashed == true || folder.MimeType != "application/vnd.google-apps.folder")
+                return Conflict(new { success = false, error = "project_folder_invalid" });
+            visualsFolderId = await EnsureFolderAsync(folder.Id, "05_VISUALS", ct);
+        }
+        else
+        {
+            var project = await _storage.EnsureProjectFoldersAsync(projectCode.Trim(), ct);
+            if (!project.SubFolders.TryGetValue("05_VISUALS", out var folderId))
+                return StatusCode(500, new { success = false, error = "visuals_folder_missing" });
+            visualsFolderId = folderId;
+        }
 
         var generatedFolderId = await EnsureFolderAsync(visualsFolderId, "GENERATED", ct);
         var safeName = BuildFileName(projectCode.Trim(), pageNumber, file.FileName, mime);

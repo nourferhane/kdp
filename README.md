@@ -116,6 +116,30 @@ POST   /api/control-center/seed-agent-prompt-ids
 
 ## Tests
 
+### Import a project from the existing Control Center
+
+After setting `ASSET_UPLOAD_API_KEY`, Google credentials and
+`GOOGLE_CONTROL_CENTER_SPREADSHEET_ID` in `.env`, rebuild the web container:
+
+```bash
+docker compose up -d --build web
+read -r -s -p 'Asset API key: ' ZUNAVIO_IMPORT_KEY; echo
+curl -fsS -X POST http://localhost:8080/api/controlcenter/import-project/ZNV-002 \
+  -H "X-Asset-Api-Key: $ZUNAVIO_IMPORT_KEY"
+unset ZUNAVIO_IMPORT_KEY
+```
+
+This endpoint reads only the matching row from the legacy `Projects` tab and
+inserts it into PostgreSQL without changing the spreadsheet. Repeating the
+request returns `created: false`. It preserves `VISUAL_PRODUCTION` and maps
+`BLOCKED_NEEDS_HUMAN` to the application's `Paused` status while retaining the
+original status in the response and the sheet. The image uploader uses the
+project's existing Drive folder, registers verified images in PostgreSQL and
+adds their asset rows without rewriting legacy sheet headers.
+
+Check the result with the plugin's `zunavio_get_project_assets` tool. It should
+return `success: true` even before images exist (`count: 0`).
+
 ```bash
 dotnet test
 ```
