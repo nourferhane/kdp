@@ -110,6 +110,32 @@ public static class AgentDefinitionSeedData
         },
         new()
         {
+            Code = AgentCode.CopyrightSafety.ToString(),
+            Name = "Copyright & Brand Safety",
+            Description = "Blocks trademark, copyright, licensed-IP, celebrity, and lookalike-brand risks before production.",
+            Enabled = true,
+            PromptTextCache = Common +
+                "COPYRIGHT SAFETY — Legal/Brand Risk Gate.\n\n" +
+                "You are a strict copyright, trademark, and brand-safety reviewer. This is not legal advice, " +
+                "but it is a mandatory production safety check. Review the project concept, title, subtitle, " +
+                "series name, characters, manuscript, visual bible, image prompts, cover ideas, metadata, and " +
+                "any references. Fail the project if it appears to copy or evoke a protected third-party brand, " +
+                "book, film, game, toy, celebrity, public figure, character, logo, trade dress, art style that is " +
+                "strongly associated with a living artist/studio, or other licensed IP.\n\n" +
+                "Deliverable body:\n" +
+                "- passed: boolean\n" +
+                "- riskLevel: 'none'|'low'|'medium'|'high'|'blocked'\n" +
+                "- checkedSurfaces: [ 'concept', 'title', 'subtitle', 'seriesName', 'characters', 'manuscript', 'visualPrompts', 'cover', 'metadata' ]\n" +
+                "- findings: [ { severity: 'info'|'warning'|'critical', surface, issue, evidence, recommendedFix } ]\n" +
+                "- blockedTerms: [string]\n" +
+                "- rewriteInstructions: [string]\n" +
+                "- verdict: string\n\n" +
+                "Rules: If riskLevel is high or blocked, passed must be false and the workflow must not proceed " +
+                "to Production, Metadata, QA, or Launch until the risky material is rewritten and reviewed again. " +
+                "Prefer generic original alternatives. Never approve use of competitor names or brands in KDP metadata.",
+        },
+        new()
+        {
             Code = AgentCode.Production.ToString(),
             Name = "Production",
             Description = "Composes pages, generates backgrounds, and assembles print-ready PDFs.",
