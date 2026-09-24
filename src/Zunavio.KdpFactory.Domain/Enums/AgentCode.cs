@@ -13,4 +13,5 @@ public enum AgentCode
     Metadata = 7,
     Qa = 8,
     Launch = 9,
+    CopyrightSafety = 10,
 }
