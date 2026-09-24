@@ -230,7 +230,8 @@ public class ControlCenterProjectImportServiceTests
 
         var project = Assert.Single(db.Projects.Projects);
         Assert.Equal("ZNV-010", project.ProjectCode);
-        Assert.Equal("United States primary; United Kingdom, Canada, Australia secondary", project.Marketplace);
+        Assert.Equal("United States primary; United Kingdom, Canada, Australia secon", project.Marketplace);
+        Assert.Equal(64, project.Marketplace.Length);
         Assert.Equal(67, project.MarketScore);
     }
 
