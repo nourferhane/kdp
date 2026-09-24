@@ -209,6 +209,32 @@ public class ControlCenterProjectImportServiceTests
     }
 
     [Fact]
+    public async Task ImportProjectAsync_imports_row_with_leading_index_column_and_quoted_csv_commas()
+    {
+        var db = new FakeUnitOfWork();
+        var header = new object[] { "", "Project_ID", "Current_Gate", "Status", "Manuscript_Version", "Visual_Bible_Version",
+            "Production_Version", "Project_Folder_URL", "Working_Title", "Final_Title", "Marketplace",
+            "Language", "Target_Age", "Book_Type", "Season", "Market_Score", "QA_Result", "Next_Action" };
+        var row = new object[] { "5", "ZNV-010", "REJECTED", "ARCHIVED", "", "", "",
+            "https://drive.google.com/drive/folders/folder-10", "My Digital Life Emergency Planner", "",
+            "United States primary; United Kingdom, Canada, Australia secondary", "English", "Adults; families; caregivers",
+            "Guided digital-legacy and emergency-access organizer", "Evergreen", "67", "SCOUT_FAIL_UNPROVEN_DEMAND", "NONE" };
+        var service = Build(db, [header, row]);
+
+        var result = await service.ImportProjectAsync("ZNV-010", CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.True(result.Created);
+        Assert.Equal(ProjectStatus.Rejected, result.DatabaseStatus);
+        Assert.Equal("NONE", result.NextAction);
+
+        var project = Assert.Single(db.Projects.Projects);
+        Assert.Equal("ZNV-010", project.ProjectCode);
+        Assert.Equal("United States primary; United Kingdom, Canada, Australia secondary", project.Marketplace);
+        Assert.Equal(67, project.MarketScore);
+    }
+
+    [Fact]
     public async Task ImportProjectAsync_imports_a_rejected_row_using_current_gate_state()
     {
         var db = new FakeUnitOfWork();
