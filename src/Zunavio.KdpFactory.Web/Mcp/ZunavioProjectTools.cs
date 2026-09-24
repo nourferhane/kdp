@@ -27,21 +27,35 @@ public sealed class ZunavioProjectTools(IControlCenterProjectImportService impor
             return JsonSerializer.Serialize(new { success = false, error = "project_code_required" });
         }
 
-        var result = await importer.ImportProjectAsync(projectCode, ct);
-        return JsonSerializer.Serialize(new
+        try
         {
-            success = result.Success,
-            created = result.Created,
-            error = result.Success ? (string?)null : result.ErrorCode,
-            errorDetail = result.ErrorDetail,
-            projectCode = result.ProjectCode,
-            projectId = result.ProjectId,
-            gate = result.Gate?.ToString(),
-            databaseStatus = result.DatabaseStatus?.ToString(),
-            sourceGate = result.SourceGate,
-            sourceStatus = result.SourceStatus,
-            nextAction = result.NextAction
-        });
+            var result = await importer.ImportProjectAsync(projectCode, ct);
+            return JsonSerializer.Serialize(new
+            {
+                success = result.Success,
+                created = result.Created,
+                error = result.Success ? (string?)null : result.ErrorCode,
+                errorDetail = result.ErrorDetail,
+                projectCode = result.ProjectCode,
+                projectId = result.ProjectId,
+                gate = result.Gate?.ToString(),
+                databaseStatus = result.DatabaseStatus?.ToString(),
+                sourceGate = result.SourceGate,
+                sourceStatus = result.SourceStatus,
+                nextAction = result.NextAction
+            });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new
+            {
+                success = false,
+                created = false,
+                error = "import_project_failed",
+                errorDetail = ex.GetBaseException().Message,
+                projectCode = projectCode.Trim(),
+            });
+        }
     }
 
     [McpServerTool(Name = "zunavio_get_project"),
