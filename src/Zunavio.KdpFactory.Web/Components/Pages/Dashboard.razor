@@ -2,6 +2,8 @@
 @inject IProjectQueryService Projects
 @inject IOrchestratorService Orchestrator
 @using Zunavio.KdpFactory.Domain.Enums
+@using Zunavio.KdpFactory.Domain.Rules
+@using Zunavio.KdpFactory.Web.Components
 
 <div class="page-head">
     <div>
@@ -32,29 +34,61 @@
         <div class="stat-label">Active</div>
     </div>
     <div class="card stat-card">
-        <div class="stat-value" style="color: var(--warn)">@(_projects.Sum(p => p.PendingReviews))</div>
+        <div class="stat-value" style="color: var(--warn)">@(_projects.Count(p => p.IsBlocked))</div>
+        <div class="stat-label">Blocked</div>
+    </div>
+    <div class="card stat-card">
+        <div class="stat-value" style="color: var(--accent)">@(_projects.Sum(p => p.PendingReviews))</div>
         <div class="stat-label">Pending reviews</div>
     </div>
     <div class="card stat-card">
-        <div class="stat-value" style="color: var(--accent)">@(_projects.Count(p => p.HasRunningJobs))</div>
+        <div class="stat-value" style="color: var(--success)">@(_projects.Count(p => p.HasRunningJobs))</div>
         <div class="stat-label">Running jobs</div>
     </div>
+</div>
+
+<div class="card filter-bar">
+    <input class="filter-input" placeholder="Search code or title…" @bind="_search" />
+    <label class="filter-label">Status
+        <select class="filter-select" @bind="_statusFilter">
+            <option value="">All</option>
+            @foreach (var s in Enum.GetValues<ProjectStatus>())
+            {
+                <option value="@s">@s</option>
+            }
+        </select>
+    </label>
+    <label class="filter-label">Stage
+        <select class="filter-select" @bind="_gateFilter">
+            <option value="">All</option>
+            @foreach (var g in WorkflowStateMachine.GateChain)
+            {
+                <option value="@g">@g</option>
+            }
+        </select>
+    </label>
+    <span class="grow"></span>
+    <span class="small">@(_filtered.Count()) of @_projects.Count</span>
 </div>
 
 @if (_projects.Count == 0)
 {
     <div class="empty">No projects yet. Create one with <b>+ New project</b> or run the demo seed (see README).</div>
 }
+else if (_filtered.Count() == 0)
+{
+    <div class="empty">No projects match the current filters.</div>
+}
 else
 {
     <div class="card-grid">
-        @foreach (var p in _projects)
+        @foreach (var p in _filtered)
         {
             <div class="card project-card">
                 <div class="topline">
                     <span class="code">@p.ProjectCode</span>
                     <span class="grow"></span>
-                    <span class="badge @GateClass(p.CurrentGate)">● @p.CurrentGate</span>
+                    <span class="badge @WorkflowUi.GateClass(p.CurrentGate)">● @p.CurrentGate</span>
                 </div>
                 <h3><a href="/projects/@p.Id">@p.WorkingTitle</a></h3>
                 <div class="meta-line">
@@ -65,12 +99,16 @@ else
                         <span>Ages @p.TargetAge</span>
                     }
                 </div>
+                <div class="progress-row">
+                    <div class="progress-bar"><span style="width: @WorkflowUi.GatePercent(p.CurrentGate)%"></span></div>
+                    <span class="small">@WorkflowUi.GatePercent(p.CurrentGate)%</span>
+                </div>
                 <div class="footline">
                     <span>Next: <b>@p.NextAction</b></span>
                     <span class="small">@p.UpdatedAt.ToLocalTime():g</span>
                 </div>
-                <div>
-                    <span class="badge @StatusClass(p.Status)">@p.Status</span>
+                <div class="badge-row">
+                    <span class="badge @WorkflowUi.StatusClass(p.Status)">@p.Status</span>
                     @if (p.PendingReviews > 0)
                     {
                         <a class="badge wait" href="/reviews">@p.PendingReviews review@(p.PendingReviews == 1 ? "" : "s") ⚑</a>
@@ -79,7 +117,15 @@ else
                     {
                         <span class="badge blue">◈ running</span>
                     }
+                    @if (p.IsBlocked)
+                    {
+                        <span class="badge bad" title="@p.BlockedReason">⊘ blocked</span>
+                    }
                 </div>
+                @if (p.IsBlocked && !string.IsNullOrWhiteSpace(p.BlockedReason))
+                {
+                    <div class="blocked-note">@p.BlockedReason</div>
+                }
             </div>
         }
     </div>
@@ -89,6 +135,34 @@ else
     private List<ProjectSummaryDto> _projects = [];
     private bool _busy;
     private string? _error;
+
+    private string _search = string.Empty;
+    private string _statusFilter = string.Empty;
+    private ProjectGate? _gateFilter;
+
+    private IEnumerable<ProjectSummaryDto> _filtered
+    {
+        get
+        {
+            var query = _projects.AsEnumerable();
+            if (!string.IsNullOrWhiteSpace(_search))
+            {
+                var needle = _search.Trim();
+                query = query.Where(p =>
+                    p.ProjectCode.Contains(needle, StringComparison.OrdinalIgnoreCase)
+                    || p.WorkingTitle.Contains(needle, StringComparison.OrdinalIgnoreCase));
+            }
+            if (Enum.TryParse<ProjectStatus>(_statusFilter, out var status))
+            {
+                query = query.Where(p => p.Status == status);
+            }
+            if (_gateFilter is { } gate)
+            {
+                query = query.Where(p => p.CurrentGate == gate);
+            }
+            return query;
+        }
+    }
 
     protected override async Task OnInitializedAsync() => await Load();
 
@@ -128,29 +202,4 @@ else
             _busy = false;
         }
     }
-
-    private static string GateClass(ProjectGate gate) => gate switch
-    {
-        ProjectGate.Idea => "blue",
-        ProjectGate.MarketResearch => "teal",
-        ProjectGate.MarketValidation => "violet",
-        ProjectGate.Architecture => "cyan",
-        ProjectGate.Manuscript => "pink",
-        ProjectGate.VisualProduction => "orange",
-        ProjectGate.BookProduction => "yellow",
-        ProjectGate.Metadata => "blue",
-        ProjectGate.Qa => "green",
-        ProjectGate.ReadyToPublish => "lime",
-        ProjectGate.Published => "ok",
-        _ => "blue",
-    };
-
-    private static string StatusClass(ProjectStatus status) => status switch
-    {
-        ProjectStatus.Active => "ok",
-        ProjectStatus.Paused => "wait",
-        ProjectStatus.Rejected => "bad",
-        ProjectStatus.Completed => "blue",
-        _ => "muted-badge",
-    };
 }

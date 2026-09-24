@@ -100,6 +100,7 @@ public static IServiceCollection AddKdpInfrastructure(this IServiceCollection se
         services.AddScoped<IArtifactStorage, GoogleDriveArtifactStorage>();
         services.AddScoped<IAgentPromptLoader, GoogleAgentPromptLoader>();
         services.AddScoped<IGoogleControlCenterSyncService, GoogleControlCenterSyncService>();
+        services.AddScoped<IControlCenterProjectImportService, ControlCenterProjectImportService>();
 
         // ---- Agents (AI execution) ----
         services.AddScoped<IAgentExecutor, GenericAgentExecutor>();

@@ -334,6 +334,32 @@ input[type="text"]:focus, input[type="password"]:focus { border-color: var(--acc
 .authbar { display: inline-flex; align-items: center; gap: 10px; }
 .authbar .who { color: var(--muted); font-size: 12.5px; }
 
+/* ---------- Dashboard filters + project cards ---------- */
+
+.filter-bar { display: flex; align-items: center; gap: 12px; padding: 12px 16px; margin-bottom: 18px; flex-wrap: wrap; }
+.filter-input { background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 9px; padding: 8px 12px; font-size: 13.5px; outline: none; min-width: 220px; }
+.filter-input:focus { border-color: var(--accent); }
+.filter-label { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); font-weight: 600; }
+.filter-select { background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 9px; padding: 8px 10px; font-size: 13px; outline: none; }
+.filter-select:focus { border-color: var(--accent); }
+
+.progress-row { display: flex; align-items: center; gap: 10px; margin: 12px 0 4px; }
+.progress-bar { flex: 1; height: 8px; border-radius: 999px; background: var(--panel-3); overflow: hidden; }
+.progress-bar > span { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--accent), var(--violet)); transition: width 0.25s ease; }
+
+.badge-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.blocked-note { margin-top: 10px; color: #f07178; background: var(--danger-soft); border: 1px solid rgba(229, 72, 77, 0.35); border-radius: var(--rad-sm); padding: 8px 10px; font-size: 12.5px; }
+
+/* ---------- Gate progression steps ---------- */
+
+.gate-steps { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+.gate-step { font-size: 10.5px; letter-spacing: 0.03em; color: var(--muted); border: 1px solid var(--border-strong); border-radius: 999px; padding: 3px 9px; text-transform: uppercase; }
+.gate-step.done { color: var(--success); border-color: rgba(63, 185, 80, 0.45); background: var(--success-soft); }
+.gate-step.current { color: var(--text); border-color: var(--accent); background: var(--accent-soft); font-weight: 700; }
+
+.subrow { color: var(--muted); font-size: 12px; max-width: 380px; overflow-wrap: anywhere; }
+.subrow.err { color: #f07178; }
+
 /* ---------- Responsive ---------- */
 
 @media (max-width: 900px) {

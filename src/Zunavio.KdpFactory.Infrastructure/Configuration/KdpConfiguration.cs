@@ -33,6 +33,9 @@ public static class KdpSettings
     public const string AdminUsernameEnvKey = "ADMIN_USERNAME";
     public const string AdminPasswordEnvKey = "ADMIN_PASSWORD";
 
+    public const string Auth0DomainEnvKey = "AUTH0_DOMAIN";
+    public const string Auth0AudienceEnvKey = "AUTH0_AUDIENCE";
+
     public const string MigrateOnStartupEnvKey = "MIGRATE_ON_STARTUP";
     public const string RunBackgroundWorkerEnvKey = "RUN_BACKGROUND_WORKER";
     public const string SeedDemoProjectEnvKey = "SEED_DEMO_PROJECT";

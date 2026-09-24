@@ -1,11 +1,13 @@
 using System.ComponentModel;
 using System.Text.Json;
+using Microsoft.AspNetCore.Authorization;
 using ModelContextProtocol.Server;
 using Zunavio.KdpFactory.Application.Abstractions;
 
 namespace Zunavio.KdpFactory.Web.Mcp;
 
 [McpServerToolType]
+[Authorize(Policy = McpSecurity.McpToolsPolicy)]
 public sealed class ZunavioAssetTools(IUnitOfWork db)
 {
     [McpServerTool(Name = "zunavio_verify_asset"), Description("Verify that a Zunavio asset is registered after physical Drive verification.")]

@@ -42,6 +42,10 @@ services:
       GOOGLE_PROMPTS_FOLDER_ID: ${GOOGLE_PROMPTS_FOLDER_ID:-}
       GOOGLE_PROJECT_FOLDER_ID: ${GOOGLE_PROJECT_FOLDER_ID:-}
       GOOGLE_CONTROL_CENTER_SPREADSHEET_ID: ${GOOGLE_CONTROL_CENTER_SPREADSHEET_ID:-}
+      # Optional: OAuth Auth0 for /mcp. Leave unset in Development (placeholder scheme,
+      # /mcp returns 401); both must be set in Production or the app refuses to start.
+      AUTH0_DOMAIN: ${AUTH0_DOMAIN:-}
+      AUTH0_AUDIENCE: ${AUTH0_AUDIENCE:-}
       # AI agents are optional; set these to enable the LLM layer:
       # OPENAI_API_KEY: ${OPENAI_API_KEY}
       # OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}

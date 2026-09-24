@@ -3,6 +3,8 @@
 @inject IOrchestratorService Orchestrator
 @inject IReviewQueryService Reviews
 @using Zunavio.KdpFactory.Domain.Enums
+@using Zunavio.KdpFactory.Domain.Rules
+@using Zunavio.KdpFactory.Web.Components
 
 <a href="/" class="backlink">← All projects</a>
 
@@ -23,11 +25,15 @@
             <div>
                 <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:6px;">
                     <span class="code" style="font-weight:750; letter-spacing:0.03em; font-size:12px; color: var(--muted);">@_project.ProjectCode</span>
-                    <span class="badge @GateClass(_project.CurrentGate)">● @_project.CurrentGate</span>
-                    <span class="badge @StatusClass(_project.Status)">@_project.Status</span>
+                    <span class="badge @WorkflowUi.GateClass(_project.CurrentGate)">● @_project.CurrentGate</span>
+                    <span class="badge @WorkflowUi.StatusClass(_project.Status)">@_project.Status</span>
                     @if (_project.MarketScore.HasValue)
                     {
                         <span class="badge cyan">score @_project.MarketScore.Value</span>
+                    }
+                    @if (_project.HasRunningJobs)
+                    {
+                        <span class="badge blue">◈ running</span>
                     }
                 </div>
                 <h1>@_project.WorkingTitle</h1>
@@ -47,13 +53,29 @@
         </div>
         <div class="card-body" style="border-top:1px solid var(--border);">
             <div class="progress-label">
-                <span>@_project.CurrentGate</span>
+                <span>@_project.CurrentGate
+                    @if (_project.PendingReviews > 0)
+                    {
+                        <span class="badge wait" style="margin-left:8px;">@_project.PendingReviews pending review@(_project.PendingReviews == 1 ? "" : "s")</span>
+                    }
+                </span>
                 <span>Next action: @_project.NextAction</span>
             </div>
             <div class="progress">
-                <span style="width: @GatePercent(_project.CurrentGate)%"></span>
+                <span style="width: @WorkflowUi.GatePercent(_project.CurrentGate)%"></span>
+            </div>
+            <div class="gate-steps">
+                @foreach (var gate in WorkflowStateMachine.GateChain)
+                {
+                    var done = WorkflowUi.GatePercent(gate) <= WorkflowUi.GatePercent(_project.CurrentGate) && _project.CurrentGate != ProjectGate.None;
+                    <span class="gate-step @(done ? "done" : "") @(gate == _project.CurrentGate ? "current" : "")" title="@gate">@gate</span>
+                }
             </div>
         </div>
+        @if (_project.IsBlocked && !string.IsNullOrWhiteSpace(_project.BlockedReason))
+        {
+            <div class="blocked-note">⊘ @_project.BlockedReason</div>
+        }
     </div>
 
     <div class="section" style="margin-top:22px;">
@@ -76,6 +98,87 @@
                 <li><span class="k">QA result</span><span class="v wrap">@_project.QaResult</span></li>
             }
         </ul>
+    </div>
+
+    <div class="section">
+        <h2>Agent runs</h2>
+        <div class="card">
+            <div class="card-body flush">
+                <table class="grid">
+                    <thead>
+                        <tr><th>Run</th><th>Agent</th><th>Status</th><th>Model</th><th>Gate rec.</th><th>Started</th><th>Completed</th><th>Result</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in _project.AgentRuns)
+                        {
+                            <tr>
+                                <td><span class="code">@r.RunCode</span></td>
+                                <td>@(string.IsNullOrWhiteSpace(r.AgentCode) ? r.AgentName : $"{r.AgentName} ({r.AgentCode})")</td>
+                                <td><span class="badge @RunStatusClass(r.Status)">@r.Status</span></td>
+                                <td><span class="small">@(string.IsNullOrEmpty(r.Model) ? "—" : r.Model)</span></td>
+                                <td>@(string.IsNullOrEmpty(r.GateRecommendation) ? "—" : r.GateRecommendation)</td>
+                                <td class="small">@(r.StartedAt?.ToLocalTime().ToString("g") ?? "—")</td>
+                                <td class="small">@(r.CompletedAt?.ToLocalTime().ToString("g") ?? "—")</td>
+                                <td class="wrap small">
+                                    @if (!string.IsNullOrEmpty(r.Summary))
+                                    {
+                                        <div class="subrow" title="@r.Summary">@r.Summary</div>
+                                    }
+                                    @if (!string.IsNullOrEmpty(r.ErrorMessage))
+                                    {
+                                        <div class="subrow err" title="@r.ErrorMessage">⚠ @r.ErrorMessage</div>
+                                    }
+                                    @if (string.IsNullOrEmpty(r.Summary) && string.IsNullOrEmpty(r.ErrorMessage))
+                                    {
+                                        <span class="muted">—</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_project.AgentRuns.Count == 0)
+                {
+                    <div class="empty">No agent runs yet.</div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Assets</h2>
+        <div class="card">
+            <div class="card-body flush">
+                <table class="grid">
+                    <thead>
+                        <tr><th>Code</th><th>Type</th><th>Version</th><th>Status</th><th>QA</th><th>Created</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var a in _project.Assets)
+                        {
+                            <tr>
+                                <td><span class="code">@a.AssetCode</span></td>
+                                <td><span class="badge @AssetTypeClass(a.AssetType)">@a.AssetType</span></td>
+                                <td>@a.Version</td>
+                                <td><span class="badge @AssetStatusClass(a.Status)">@a.Status</span></td>
+                                <td><span class="badge @AssetQaClass(a.QaStatus)">@a.QaStatus</span></td>
+                                <td class="small">@a.CreatedAt.ToLocalTime():g</td>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(a.DriveUrl))
+                                    {
+                                        <a class="btn-ghost" href="@a.DriveUrl" target="_blank" rel="noopener">open ↗</a>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_project.Assets.Count == 0)
+                {
+                    <div class="empty">No registered assets yet. Images land in the Drive folder; register them with the asset uploader.</div>
+                }
+            </div>
+        </div>
     </div>
 
     <div class="section">
@@ -143,30 +246,38 @@
         await Load();
     }
 
-    private static int GatePercent(ProjectGate gate) => gate == ProjectGate.None ? 0 : (int)gate * 100 / (int)ProjectGate.Published;
-
-    private static string GateClass(ProjectGate gate) => gate switch
+    private static string RunStatusClass(AgentRunStatus status) => status switch
     {
-        ProjectGate.Idea => "blue",
-        ProjectGate.MarketResearch => "teal",
-        ProjectGate.MarketValidation => "violet",
-        ProjectGate.Architecture => "cyan",
-        ProjectGate.Manuscript => "pink",
-        ProjectGate.VisualProduction => "orange",
-        ProjectGate.BookProduction => "yellow",
-        ProjectGate.Metadata => "blue",
-        ProjectGate.Qa => "green",
-        ProjectGate.ReadyToPublish => "lime",
-        ProjectGate.Published => "ok",
+        AgentRunStatus.Pending => "muted-badge",
+        AgentRunStatus.Running => "blue",
+        AgentRunStatus.Complete => "ok",
+        AgentRunStatus.Failed => "bad",
+        AgentRunStatus.NeedsReview => "wait",
+        AgentRunStatus.Cancelled => "wait",
+        _ => "muted-badge",
+    };
+
+    private static string AssetTypeClass(AssetType type) => type switch
+    {
+        AssetType.Cover => "pink",
+        AssetType.InteriorPdf => "violet",
+        AssetType.Manuscript => "cyan",
+        AssetType.Illustration => "orange",
         _ => "blue",
     };
 
-    private static string StatusClass(ProjectStatus status) => status switch
+    private static string AssetQaClass(AssetQaStatus status) => status switch
     {
-        ProjectStatus.Active => "ok",
-        ProjectStatus.Paused => "wait",
-        ProjectStatus.Rejected => "bad",
-        ProjectStatus.Completed => "blue",
+        AssetQaStatus.Pass => "ok",
+        AssetQaStatus.Fail => "bad",
+        _ => "muted-badge",
+    };
+
+    private static string AssetStatusClass(AssetStatus status) => status switch
+    {
+        AssetStatus.Approved => "ok",
+        AssetStatus.Final => "blue",
+        AssetStatus.Superseded => "wait",
         _ => "muted-badge",
     };
 

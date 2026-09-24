@@ -111,8 +111,13 @@ GET    /api/agents
 POST   /api/agents/{id}/refresh-prompt
 GET    /api/jobs?take=50
 POST   /api/control-center/import
+POST   /api/controlcenter/import-project/{projectCode}
 POST   /api/control-center/seed-agent-prompt-ids
 ```
+
+`POST /api/controlcenter/import-project/{projectCode}` imports a single legacy row
+(documented further down) and is the same idempotent code path as the MCP tool
+`zunavio_import_project`.
 
 ## Tests
 
@@ -139,6 +144,39 @@ adds their asset rows without rewriting legacy sheet headers.
 
 Check the result with the plugin's `zunavio_get_project_assets` tool. It should
 return `success: true` even before images exist (`count: 0`).
+
+### Imported state mapping
+
+The legacy `Current_Gate` column can carry either a gate or a terminal state word.
+State words are folded into the application status and the gate is inferred from
+the version columns:
+
+| Current_Gate column | Status column | Result |
+|---------------------|---------------|--------|
+| `MARKET_RESEARCH`   | `ACTIVE`      | gate `MarketResearch`, status `Active` |
+| `REJECTED`          | `ACTIVE`      | gate inferred from versions, status `Rejected` |
+| `PAUSED`            | any           | status `Paused` |
+| `READY_TO_PUBLISH`  | `ACTIVE`      | gate `ReadyToPublish`, status `Active` |
+
+The mapping lives in `Domain/Rules/ControlCenterLegacyMapper.cs` (pure, unit-tested).
+
+## MCP server and ChatGPT connector
+
+The app exposes the MCP server at `/mcp` (Streamable HTTP), plus the OAuth
+protected-resource metadata at `/.well-known/oauth-protected-resource`. Tools live
+in the `Zunavio.KdpFactory.Web/Mcp` folder and are exposed over two scopes:
+`mcp:tools` (read-only: `zunavio_get_project`, `zunavio_get_project_assets`,
+`zunavio_verify_asset`) and `mcp:tools:write` (`zunavio_import_project`).
+Every tool additionally enforces a Bearer token, so a token without the write
+scope can never perform a write.
+
+- In **Development without `AUTH0_DOMAIN`/`AUTH0_AUDIENCE`**: a placeholder Bearer
+  scheme is registered and `/mcp` rejects every token with 401 so mistakes are
+  loud, never silently open.
+- In **Production**: both variables are required and the app refuses to start
+  without them. Tokens are validated against the Auth0 tenant and audience.
+- Connect ChatGPT (or any MCP client) by following `CHATGPT_CONNECTOR.md`. It
+  lists the Auth0 tenant settings that require a human in the Auth0 dashboard.
 
 ```bash
 dotnet test
