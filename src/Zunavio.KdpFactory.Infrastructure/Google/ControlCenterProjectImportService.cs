@@ -79,17 +79,26 @@ public class ControlCenterProjectImportService : IControlCenterProjectImportServ
                 "The Google Sheets backend could not be reached (API disabled, permission or network error).");
         }
 
-        if (rows.Count == 0 || rows[0].Count == 0 || rows[0][0]?.ToString() != "Project_ID")
+        if (rows.Count == 0 || rows[0].Count == 0)
         {
             return ProjectImportResult.Fail(
                 "unexpected_control_center_schema",
                 projectCode,
-                "Expected the legacy Projects tab to start with the 'Project_ID' header.");
+                "Expected a legacy Projects tab header containing 'Project_ID'.");
+        }
+
+        var headers = RowHeaders(rows[0]);
+        if (!headers.Contains("Project_ID"))
+        {
+            return ProjectImportResult.Fail(
+                "unexpected_control_center_schema",
+                projectCode,
+                "Expected a legacy Projects tab header containing 'Project_ID'.");
         }
 
         string CellRow(int rowIndex, string header)
         {
-            var index = RowHeaders(rows[0]).IndexOf(header);
+            var index = headers.IndexOf(header);
             var cells = rows[rowIndex];
             return index >= 0 && index < cells.Count ? cells[index]?.ToString()?.Trim() ?? string.Empty : string.Empty;
         }
@@ -211,5 +220,5 @@ public class ControlCenterProjectImportService : IControlCenterProjectImportServ
 
     /// <summary>Header words of the first (header) row.</summary>
     private static List<string> RowHeaders(IList<object> headerRow) =>
-        headerRow.Select(v => v?.ToString() ?? string.Empty).ToList();
+        headerRow.Select(v => (v?.ToString() ?? string.Empty).Trim().TrimStart('\ufeff')).ToList();
 }
