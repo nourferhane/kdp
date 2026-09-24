@@ -181,6 +181,23 @@ app.UseHttpsRedirection();
 app.UseAntiforgery();
 app.UseAuthentication();
 
+// The Streamable HTTP transport is POST-only in Stateless mode. ChatGPT's
+// connector probes the transport URL with an unauthenticated GET first; the
+// dashboard cookie fallback would otherwise answer 302 -> /login and the
+// connector reports "Service not found". Answer 405 (Allow: POST) so clients
+// fall back to POST; the OAuth discovery is already handled by McpAuth above.
+app.UseWhen(
+    ctx => ctx.Request.Path.Equals("/mcp", StringComparison.OrdinalIgnoreCase)
+        && (HttpMethods.IsGet(ctx.Request.Method) || HttpMethods.IsHead(ctx.Request.Method)),
+    branch => branch.Run(async context =>
+    {
+        context.Response.StatusCode = StatusCodes.Status405MethodNotAllowed;
+        context.Response.Headers.Allow = HttpMethods.Post;
+        context.Response.ContentType = "application/json";
+        await context.Response.WriteAsync(
+            """{"jsonrpc":"2.0","id":null,"error":{"code":-32601,"message":"Method not allowed: this MCP endpoint supports POST only."}}""");
+    }));
+
 app.UseAuthorization();
 
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false }).AllowAnonymous();
@@ -237,6 +254,53 @@ app.MapControllers();
 // McpAuth request-handler also answers /.well-known/oauth-protected-resource/*.
 // Write/upload REST endpoints remain separately protected by their API-key controller.
 app.MapMcp("/mcp").RequireAuthorization(McpSecurity.McpEndpointPolicy);
+
+// RFC 8414 authorization-server metadata, served on THIS host. The ChatGPT
+// connector probes /.well-known/oauth-authorization-server (and the OIDC alias)
+// before starting OAuth; the dashboard cookie fallback answered 302 -> /login and
+// ChatGPT reported "Service not found". Mirror Auth0's endpoints so discovery
+// completes on the authz-server host while DCR still hits Auth0's /oidc/register.
+if (!string.IsNullOrWhiteSpace(auth0Domain))
+{
+    Dictionary<string, object?> AuthServerMetadata() => new()
+    {
+        ["issuer"] = $"https://{auth0Domain}/",
+        ["authorization_endpoint"] = $"https://{auth0Domain}/authorize",
+        ["token_endpoint"] = $"https://{auth0Domain}/oauth/token",
+        ["userinfo_endpoint"] = $"https://{auth0Domain}/userinfo",
+        ["jwks_uri"] = $"https://{auth0Domain}/.well-known/jwks.json",
+        ["registration_endpoint"] = $"https://{auth0Domain}/oidc/register",
+        ["revocation_endpoint"] = $"https://{auth0Domain}/oauth/revoke",
+        ["scopes_supported"] = new[]
+        {
+            "openid", "profile", "offline_access",
+            McpScopePolicy.ReadScope, McpScopePolicy.WriteScope,
+        },
+        ["response_types_supported"] = new[] { "code" },
+        ["response_modes_supported"] = new[] { "query", "form_post" },
+        ["grant_types_supported"] = new[]
+        {
+            "authorization_code", "refresh_token",
+        },
+        ["token_endpoint_auth_methods_supported"] = new[]
+        {
+            "none", "private_key_jwt", "client_secret_basic", "client_secret_post",
+            "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+        },
+        ["code_challenge_methods_supported"] = new[] { "S256", "plain" },
+        ["authorization_response_iss_parameter_supported"] = true,
+    };
+
+    var asMetadata = AuthServerMetadata();
+    // Path-append discovery (RFC 8414 §3.2): /.well-known/oauth-authorization-server/{resource path}
+    app.MapGet("/.well-known/oauth-authorization-server", () => asMetadata).AllowAnonymous();
+    app.MapGet("/.well-known/oauth-authorization-server/{**path}", () => asMetadata).AllowAnonymous();
+    // Path-insertion layout (RFC 8414 §3.1): {resource path}/.well-known/oauth-authorization-server
+    app.MapGet("/mcp/.well-known/oauth-authorization-server", () => asMetadata).AllowAnonymous();
+    // OIDC alias — ChatGPT probes both.
+    app.MapGet("/.well-known/openid-configuration", () => asMetadata).AllowAnonymous();
+    app.MapGet("/mcp/.well-known/openid-configuration", () => asMetadata).AllowAnonymous();
+}
 
 app.MapRazorComponents<Zunavio.KdpFactory.Web.Components.App>()
     .AddInteractiveServerRenderMode();

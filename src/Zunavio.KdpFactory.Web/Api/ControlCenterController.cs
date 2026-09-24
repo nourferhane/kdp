@@ -77,6 +77,8 @@ public sealed class ControlCenterController : ControllerBase
                 "invalid_project_code" => BadRequest(new { success = false, error = result.ErrorCode }),
                 "control_center_not_configured" =>
                     StatusCode(503, new { success = false, error = result.ErrorCode }),
+                "google_sheets_unavailable" =>
+                    StatusCode(502, new { success = false, error = result.ErrorCode, message = result.ErrorDetail }),
                 _ => Conflict(new { success = false, error = result.ErrorCode, message = result.ErrorDetail })
             };
         }

@@ -70,8 +70,16 @@ public class ControlCenterProjectImportService : IControlCenterProjectImportServ
                 "GOOGLE_* credentials and GOOGLE_CONTROL_CENTER_SPREADSHEET_ID are required.");
         }
 
-        var rows = await ReadSheetRowsAsync(ct);
-        if (rows is null || rows.Count == 0 || rows[0].Count == 0 || rows[0][0]?.ToString() != "Project_ID")
+        var rows = await ReadSheetRowsSafelyAsync(ct);
+        if (rows is null)
+        {
+            return ProjectImportResult.Fail(
+                "google_sheets_unavailable",
+                projectCode,
+                "The Google Sheets backend could not be reached (API disabled, permission or network error).");
+        }
+
+        if (rows.Count == 0 || rows[0].Count == 0 || rows[0][0]?.ToString() != "Project_ID")
         {
             return ProjectImportResult.Fail(
                 "unexpected_control_center_schema",
@@ -167,8 +175,9 @@ public class ControlCenterProjectImportService : IControlCenterProjectImportServ
     }
 
     /// <summary>
-    /// Reads every row of the legacy Projects tab. Injected seam for tests:
-    /// subclasses can return a fixed table without touching Google.
+    /// Reads every row of the legacy Projects tab, mapping reachability failures
+    /// (disabled API, bad permissions, network) to a stable result instead of a 500.
+    /// Injected seam for tests: subclasses can return a fixed table without touching Google.
     /// </summary>
     protected virtual async Task<IList<IList<object>>?> ReadSheetRowsAsync(CancellationToken ct)
     {
@@ -176,6 +185,28 @@ public class ControlCenterProjectImportService : IControlCenterProjectImportServ
             _options.ControlCenterSpreadsheetId, "Projects!A:S");
         var range = await request.ExecuteAsync(ct);
         return range.Values;
+    }
+
+    private async Task<IList<IList<object>>?> ReadSheetRowsSafelyAsync(CancellationToken ct)
+    {
+        try
+        {
+            return await ReadSheetRowsAsync(ct);
+        }
+        catch (global::Google.GoogleApiException ex)
+        {
+            _logger.LogWarning(ex, "Google Sheets is not reachable for the Control Center import.");
+        }
+        catch (System.Net.Http.HttpRequestException ex)
+        {
+            _logger.LogWarning(ex, "Network failure while reading the Control Center sheet.");
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or System.Net.Sockets.SocketException)
+        {
+            _logger.LogWarning(ex, "I/O failure while reading the Control Center sheet.");
+        }
+
+        return null;
     }
 
     /// <summary>Header words of the first (header) row.</summary>

@@ -79,6 +79,19 @@ public class ControlCenterProjectImportServiceTests
     }
 
     [Fact]
+    public async Task ImportProjectAsync_fails_cleanly_when_google_sheets_is_unreachable()
+    {
+        var db = new FakeUnitOfWork();
+        var service = Build(db, null);
+
+        var result = await service.ImportProjectAsync("ZNV-002", CancellationToken.None);
+
+        Assert.False(result.Success);
+        Assert.Equal("google_sheets_unavailable", result.ErrorCode);
+        Assert.Equal(0, db.SaveChangesCalls);
+    }
+
+    [Fact]
     public async Task ImportProjectAsync_fails_when_google_is_not_configured()
     {
         var db = new FakeUnitOfWork();
