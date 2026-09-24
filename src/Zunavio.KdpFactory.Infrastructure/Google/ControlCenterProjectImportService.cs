@@ -191,7 +191,7 @@ public class ControlCenterProjectImportService : IControlCenterProjectImportServ
     protected virtual async Task<IList<IList<object>>?> ReadSheetRowsAsync(CancellationToken ct)
     {
         var request = _credentials.Sheets.Spreadsheets.Values.Get(
-            _options.ControlCenterSpreadsheetId, "Projects!A:S");
+            _options.ControlCenterSpreadsheetId, "Projects!A:T");
         var range = await request.ExecuteAsync(ct);
         return range.Values;
     }
