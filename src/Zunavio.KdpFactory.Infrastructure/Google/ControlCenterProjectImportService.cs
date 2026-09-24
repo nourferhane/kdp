@@ -141,23 +141,23 @@ public class ControlCenterProjectImportService : IControlCenterProjectImportServ
         var project = new Project
         {
             ProjectCode = projectCode,
-            WorkingTitle = CellRow(row, "Working_Title"),
-            FinalTitle = CellRow(row, "Final_Title"),
-            Marketplace = CellRow(row, "Marketplace"),
-            Language = CellRow(row, "Language"),
-            TargetAge = CellRow(row, "Target_Age"),
-            BookType = CellRow(row, "Book_Type"),
-            Season = CellRow(row, "Season"),
+            WorkingTitle = Clip(CellRow(row, "Working_Title"), 200),
+            FinalTitle = Clip(CellRow(row, "Final_Title"), 200),
+            Marketplace = Clip(CellRow(row, "Marketplace"), 64),
+            Language = Clip(CellRow(row, "Language"), 32),
+            TargetAge = Clip(CellRow(row, "Target_Age"), 32),
+            BookType = Clip(CellRow(row, "Book_Type"), 64),
+            Season = Clip(CellRow(row, "Season"), 64),
             CurrentGate = gate,
             Status = databaseStatus,
             MarketScore = int.TryParse(CellRow(row, "Market_Score"), out var score) ? score : null,
-            CurrentManuscriptVersion = CellRow(row, "Manuscript_Version"),
-            CurrentVisualBibleVersion = CellRow(row, "Visual_Bible_Version"),
-            CurrentProductionVersion = CellRow(row, "Production_Version"),
+            CurrentManuscriptVersion = Clip(CellRow(row, "Manuscript_Version"), 16),
+            CurrentVisualBibleVersion = Clip(CellRow(row, "Visual_Bible_Version"), 16),
+            CurrentProductionVersion = Clip(CellRow(row, "Production_Version"), 16),
             QaResult = CellRow(row, "QA_Result"),
-            NextAction = ControlCenterLegacyMapper.NextAction(
+            NextAction = Clip(ControlCenterLegacyMapper.NextAction(
                 sourceGate, sourceStatus, CellRow(row, "Next_Action"),
-                CellRow(row, "Manuscript_Version"), CellRow(row, "Visual_Bible_Version"), CellRow(row, "Production_Version")),
+                CellRow(row, "Manuscript_Version"), CellRow(row, "Visual_Bible_Version"), CellRow(row, "Production_Version")), 64),
             DriveFolderId = folderId,
             DriveFolderUrl = folderUrl,
         };
@@ -221,4 +221,10 @@ public class ControlCenterProjectImportService : IControlCenterProjectImportServ
     /// <summary>Header words of the first (header) row.</summary>
     private static List<string> RowHeaders(IList<object> headerRow) =>
         headerRow.Select(v => (v?.ToString() ?? string.Empty).Trim().TrimStart('\ufeff')).ToList();
+
+    private static string Clip(string? value, int maxLength)
+    {
+        var text = value?.Trim() ?? string.Empty;
+        return text.Length <= maxLength ? text : text[..maxLength];
+    }
 }
