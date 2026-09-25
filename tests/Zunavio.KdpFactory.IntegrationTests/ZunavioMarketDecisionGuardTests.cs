@@ -24,6 +24,36 @@ public sealed class ZunavioMarketDecisionGuardTests
             project, "RUN_SCOUT_TARGETED_EVIDENCE", "VALIDATOR_HOLD"));
     }
 
+    [Theory]
+    [InlineData("SCOUT_IN_PROGRESS")]
+    [InlineData("RESEARCH_IN_PROGRESS")]
+    public void ScoutRecommendation_AcceptsInitialResearchButNotArbitraryAction(string qaResult)
+    {
+        var project = new Project
+        {
+            CurrentGate = ProjectGate.MarketResearch,
+            Status = ProjectStatus.Active,
+            NextAction = "RUN_SCOUT_CONTINUE",
+            QaResult = qaResult
+        };
+
+        Assert.True(ZunavioMarketDecisionTools.IsScoutRecommendationState(project));
+        project.NextAction = "RUN_VALIDATOR";
+        Assert.False(ZunavioMarketDecisionTools.IsScoutRecommendationState(project));
+        project.NextAction = "RUN_SCOUT_CONTINUE";
+        project.Status = ProjectStatus.Paused;
+        Assert.False(ZunavioMarketDecisionTools.IsScoutRecommendationState(project));
+    }
+
+    [Fact]
+    public void ScoutRecommendation_RecognizesEnglishDecisionAndRejectsUnrelatedText()
+    {
+        Assert.True(ZunavioMarketDecisionTools.ContainsScoutRejectionRecommendation(
+            "Decision: REJECTION RECOMMENDED; Orchestrator review required."));
+        Assert.False(ZunavioMarketDecisionTools.ContainsScoutRejectionRecommendation(
+            "Decision: CONTINUE_RESEARCH. Revisit competitors later."));
+    }
+
     [Fact]
     public void FinalReview_RequiresPriorScoutRecommendationAndActiveResearch()
     {

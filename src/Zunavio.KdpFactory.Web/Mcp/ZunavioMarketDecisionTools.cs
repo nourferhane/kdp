@@ -56,8 +56,8 @@ public sealed class ZunavioMarketDecisionTools(
         if (!settings.GoogleEnabled || string.IsNullOrWhiteSpace(settings.ControlCenterSpreadsheetId))
             return Result(false, "control_center_unavailable", projectCode);
 
-        var expectedNext = finalize ? "REVIEW_SCOUT_DECISION" : "RUN_SCOUT_TARGETED_EVIDENCE";
-        var expectedQa = finalize ? "SCOUT_REJECTION_RECOMMENDED" : "VALIDATOR_HOLD";
+        var expectedNext = finalize ? "REVIEW_SCOUT_DECISION" : "";
+        var expectedQa = finalize ? "SCOUT_REJECTION_RECOMMENDED" : "";
         var next = finalize ? "NONE" : "REVIEW_SCOUT_DECISION";
         var qa = finalize ? "SCOUT_FAIL_UNPROVEN_DEMAND" : "SCOUT_REJECTION_RECOMMENDED";
         var assetType = finalize ? AssetType.OrchestratorReview : AssetType.ScoutReport;
@@ -68,8 +68,16 @@ public sealed class ZunavioMarketDecisionTools(
         {
             var project = await db.Projects.GetByCodeAsync(projectCode, ct);
             if (project is null) return Result(false, "project_not_found", projectCode);
-            if (!Allowed(project, expectedNext, expectedQa))
+            if (finalize ? !Allowed(project, expectedNext, expectedQa)
+                : !IsScoutRecommendationState(project))
                 return Result(false, "project_state_changed", projectCode);
+            if (!finalize)
+            {
+                // Carry the exact approved starting state into both the sheet check and
+                // the pre-write database recheck. Never accept an arbitrary action pair.
+                expectedNext = project.NextAction;
+                expectedQa = project.QaResult;
+            }
             if ((await db.Reviews.GetPendingForProjectAsync(project.Id, ct)).Count != 0)
                 return Result(false, "human_review_pending", projectCode);
 
@@ -93,8 +101,9 @@ public sealed class ZunavioMarketDecisionTools(
             var document = await storage.ReadDocumentAsync(driveFileId, ct);
             if (document.FileId != driveFileId
                 || !document.Content.Contains(projectCode, StringComparison.Ordinal)
-                || !document.Content.Contains(finalize ? "SCOUT_FAIL_UNPROVEN_DEMAND" : "rejet",
-                    StringComparison.OrdinalIgnoreCase))
+                || !(finalize
+                    ? document.Content.Contains("SCOUT_FAIL_UNPROVEN_DEMAND", StringComparison.OrdinalIgnoreCase)
+                    : ContainsScoutRejectionRecommendation(document.Content)))
                 return Result(false, "evidence_content_mismatch", projectCode);
             if (finalize)
             {
@@ -223,6 +232,16 @@ public sealed class ZunavioMarketDecisionTools(
     public static bool Allowed(Project project, string expectedNext, string expectedQa) =>
         project.CurrentGate == ProjectGate.MarketResearch && project.Status == ProjectStatus.Active
         && project.NextAction == expectedNext && project.QaResult == expectedQa;
+
+    public static bool IsScoutRecommendationState(Project project) =>
+        Allowed(project, "RUN_SCOUT_TARGETED_EVIDENCE", "VALIDATOR_HOLD")
+        || Allowed(project, "RUN_SCOUT_CONTINUE", "SCOUT_IN_PROGRESS")
+        || Allowed(project, "RUN_SCOUT_CONTINUE", "RESEARCH_IN_PROGRESS");
+
+    public static bool ContainsScoutRejectionRecommendation(string content) =>
+        content.Contains("SCOUT_REJECTION_RECOMMENDED", StringComparison.OrdinalIgnoreCase)
+        || content.Contains("REJECTION RECOMMENDED", StringComparison.OrdinalIgnoreCase)
+        || content.Contains("rejet", StringComparison.OrdinalIgnoreCase);
 
     private async Task RestoreIfOwnedAsync(string spreadsheetId, string[] header, int rowNumber,
         Dictionary<string, string> changes, Dictionary<string, string> previous, CancellationToken ct)

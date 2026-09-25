@@ -143,10 +143,14 @@ publish on KDP as part of this recovery.
 ## Record an evidence-backed Scout rejection
 
 1. The project must be active at `MarketResearch` in PostgreSQL and
-   `MARKET_RESEARCH / ACTIVE` in the legacy Control Center. After a Validator
-   hold, both must show `VALIDATOR_HOLD / RUN_SCOUT_TARGETED_EVIDENCE`.
+   `MARKET_RESEARCH / ACTIVE` in the legacy Control Center. The Scout decision
+   accepts either `VALIDATOR_HOLD / RUN_SCOUT_TARGETED_EVIDENCE`, or initial
+   research with `RUN_SCOUT_CONTINUE` and `SCOUT_IN_PROGRESS` or
+   `RESEARCH_IN_PROGRESS`. The exact pair must match in both systems.
 2. Write and inspect the Scout decision as a real Google Doc in one of the
-   project's subfolders. Call `zunavio_record_scout_rejection` with its real
+   project's subfolders. State the recommendation explicitly as `rejet`,
+   `REJECTION RECOMMENDED` or `SCOUT_REJECTION_RECOMMENDED`. Call
+   `zunavio_record_scout_rejection` with its real
    Drive file ID and version such as `v1.2`. The server checks the Drive file
    and text, registers the evidence in PostgreSQL and verifies the updated
    Control Center and PostgreSQL states. It sets
