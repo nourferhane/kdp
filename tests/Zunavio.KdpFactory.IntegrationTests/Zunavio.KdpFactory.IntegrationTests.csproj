@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Zunavio.KdpFactory.Infrastructure\Zunavio.KdpFactory.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Zunavio.KdpFactory.Web\Zunavio.KdpFactory.Web.csproj" />
   </ItemGroup>
 
 </Project>

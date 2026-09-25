@@ -1,5 +1,6 @@
 using Google.Apis.Sheets.v4;
 using Google.Apis.Sheets.v4.Data;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Zunavio.KdpFactory.Application.Abstractions;
@@ -162,16 +163,31 @@ public sealed class GoogleControlCenterSyncService : IGoogleControlCenterSyncSer
 
         foreach (var asset in await _db.Assets.GetByProjectAsync(project.Id, ct))
         {
-            // Only add verified gateway uploads. Leave all existing legacy rows untouched.
-            if (asset.AssetType != Domain.Enums.AssetType.Illustration || string.IsNullOrWhiteSpace(asset.DriveFileId))
+            // Only synchronize verified gateway uploads. Never replace unrelated legacy rows.
+            if (asset.AssetType != Domain.Enums.AssetType.Illustration || string.IsNullOrWhiteSpace(asset.DriveFileId)
+                || !IsVerifiedGatewayAsset(asset.ContentJson))
                 continue;
-            if (rows.Skip(1).Any(row => row.Count > 0 && row[0]?.ToString() == asset.AssetCode))
-                continue;
-
             var values = new object?[] { asset.AssetCode, project.ProjectCode, "ILLUSTRATION",
                 asset.Version, asset.DriveUrl, asset.Status.ToString().ToUpperInvariant(),
                 "IMAGE_GENERATION", asset.QaStatus.ToString().ToUpperInvariant(),
                 asset.CreatedAt.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss") };
+            var matches = rows.Select((row, index) => (row, index))
+                .Where(item => item.index > 0 && item.row.Count > 0 && item.row[0]?.ToString() == asset.AssetCode).ToArray();
+            if (matches.Length > 1)
+                throw new InvalidOperationException($"Duplicate legacy asset ID {asset.AssetCode}; refusing to sync.");
+            if (matches.Length == 1)
+            {
+                var (row, index) = matches[0];
+                if (row.Count < 2 || row[1]?.ToString() != project.ProjectCode)
+                    throw new InvalidOperationException($"Legacy asset {asset.AssetCode} belongs to a different project.");
+                var update = sheets.Spreadsheets.Values.Update(new ValueRange
+                {
+                    Values = [values.ToList()]
+                }, _options.ControlCenterSpreadsheetId, $"Assets!A{index + 1}:I{index + 1}");
+                update.ValueInputOption = SpreadsheetsResource.ValuesResource.UpdateRequest.ValueInputOptionEnum.RAW;
+                await update.ExecuteAsync(ct);
+                continue;
+            }
             var append = sheets.Spreadsheets.Values.Append(new ValueRange
             {
                 Values = [values.ToList()]
@@ -180,6 +196,20 @@ public sealed class GoogleControlCenterSyncService : IGoogleControlCenterSyncSer
             append.InsertDataOption = SpreadsheetsResource.ValuesResource.AppendRequest.InsertDataOptionEnum.INSERTROWS;
             await append.ExecuteAsync(ct);
         }
+    }
+
+    private static bool IsVerifiedGatewayAsset(string? contentJson)
+    {
+        if (string.IsNullOrWhiteSpace(contentJson)) return false;
+        try
+        {
+            using var content = JsonDocument.Parse(contentJson);
+            return content.RootElement.TryGetProperty("verified", out var verified)
+                && verified.ValueKind == JsonValueKind.True
+                && content.RootElement.TryGetProperty("sha256", out var sha)
+                && !string.IsNullOrWhiteSpace(sha.GetString());
+        }
+        catch (JsonException) { return false; }
     }
 
     private async Task<ControlCenterImportResult> ImportProjectsAsync(

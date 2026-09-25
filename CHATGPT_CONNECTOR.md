@@ -29,8 +29,9 @@ ZUNAVIO KDP Factory (this app)
 
 The app's `/.well-known/oauth-protected-resource` advertises scopes
 `mcp:tools` and `mcp:tools:write` so a compliant client requests exactly
-those during the authorization step. Only `zunavio_import_project` needs the
-write scope; the other three tools run with `mcp:tools` alone.
+those during the authorization step. `zunavio_import_project`,
+`zunavio_upload_image` and `zunavio_resume_visual_production` require the
+write scope; read tools use `mcp:tools` alone.
 
 ## Auth0 tenant setup (one-time, human in the dashboard)
 
@@ -91,6 +92,8 @@ AUTH0_AUDIENCE=https://your-tenant.us.auth0.com/api/v2/
    - `zunavio_get_project_assets` (read)
    - `zunavio_verify_asset` (read)
    - `zunavio_import_project` (write)
+   - `zunavio_upload_image` (write)
+   - `zunavio_resume_visual_production` (write)
 3. Authorize the requested scopes in the Auth0 consent screen when prompted.
 
 ## Verify
@@ -107,6 +110,32 @@ With a valid read token, ask ChatGPT to check a known project
 (`zunavio_get_project { "projectCode": "ZNV-001" }`). To test a write, ask it
 to import `ZNV-002` via `zunavio_import_project` — the import is read-only on
 the spreadsheet, idempotent, and a repeat returns `created: false`.
+
+## Recover blocked visual production
+
+1. Check `zunavio_get_project`. An unknown project returns `project_not_found`;
+   the uploader will not create its folder or claim an API project exists.
+2. If PostgreSQL says `Paused / VisualProduction` and the legacy Control Center
+   says `VISUAL_PRODUCTION / BLOCKED_NEEDS_HUMAN /
+   HUMAN_INTERVENTION_REQUIRED`, call `zunavio_resume_visual_production`.
+   This guarded operation synchronizes the sheet and PostgreSQL to `ACTIVE`,
+   `RUN_IMAGE_GENERATION`, `PENDING_IMAGE_GENERATION`. A pending review or changed
+   row blocks it. It never marks visual QA complete.
+3. Generate each image with ChatGPT Image Generation. Pass the *real generated
+   file bytes* as base64 (no data-URI prefix) to `zunavio_upload_image` with
+   the project code and page number. This validates the image signature,
+   uploads/replaces the canonical page file, downloads it from Drive for a
+   SHA-256 comparison, and registers a Draft asset in PostgreSQL. It returns
+   the actual `assetCode` and `driveFileId`; a local path or made-up ID is not
+   accepted. Two known diagnostic placeholder hashes are refused.
+4. Call `zunavio_verify_asset` with each returned `assetCode`. It independently
+   downloads the Drive bytes and checks the recorded hash. Inspect the physical
+   Drive image and perform independent visual QA before any later gate change.
+
+The REST `POST /api/assets/upload` route uses the same verification service
+and still requires its API key. Deployment, OAuth write-scope grant, connector
+refresh and live end-to-end validation are separate operational steps. Never
+publish on KDP as part of this recovery.
 
 ## Troubleshooting
 

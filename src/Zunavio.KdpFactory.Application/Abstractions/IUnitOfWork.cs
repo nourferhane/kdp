@@ -13,6 +13,7 @@ public interface IProjectRepository
     Task<IReadOnlyList<Project>> GetAllAsync(CancellationToken ct);
     Task<Project?> GetByIdAsync(Guid id, CancellationToken ct);
     Task<Project?> GetByCodeAsync(string projectCode, CancellationToken ct);
+    Task<Project?> GetTrackedByCodeAsync(string projectCode, CancellationToken ct);
     Task<Project?> GetByExternalIdAsync(string externalId, CancellationToken ct);
     Task AddAsync(Project project, CancellationToken ct);
     Task<int> GetProjectSequenceAsync(CancellationToken ct);
@@ -51,6 +52,7 @@ public interface IAssetRepository
     Task<Asset?> GetLatestApprovedAsync(Guid projectId, AssetType type, CancellationToken ct);
     Task<Asset?> GetLatestAsync(Guid projectId, AssetType type, CancellationToken ct);
     Task<Asset?> GetByCodeAsync(string assetCode, CancellationToken ct);
+    Task<Asset?> GetTrackedByCodeAsync(string assetCode, CancellationToken ct);
     Task<Asset?> GetByIdAsync(Guid id, CancellationToken ct);
     Task AddAsync(Asset asset, CancellationToken ct);
     Task<IReadOnlyList<Asset>> GetAllAsync(CancellationToken ct);

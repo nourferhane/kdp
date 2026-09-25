@@ -17,6 +17,9 @@ public sealed class ProjectRepository(KdpDbContext db) : IProjectRepository
     public async Task<Project?> GetByCodeAsync(string projectCode, CancellationToken ct) =>
         await db.Projects.AsNoTracking().FirstOrDefaultAsync(p => p.ProjectCode == projectCode, ct);
 
+    public Task<Project?> GetTrackedByCodeAsync(string projectCode, CancellationToken ct) =>
+        db.Projects.FirstOrDefaultAsync(p => p.ProjectCode == projectCode, ct);
+
     public async Task<Project?> GetByExternalIdAsync(string externalId, CancellationToken ct) =>
         await db.Projects.AsNoTracking().FirstOrDefaultAsync(p => p.ExternalId == externalId, ct);
 
@@ -137,6 +140,9 @@ public sealed class AssetRepository(KdpDbContext db) : IAssetRepository
 
     public Task<Asset?> GetByCodeAsync(string assetCode, CancellationToken ct) =>
         db.Assets.AsNoTracking().FirstOrDefaultAsync(a => a.AssetCode == assetCode, ct);
+
+    public Task<Asset?> GetTrackedByCodeAsync(string assetCode, CancellationToken ct) =>
+        db.Assets.FirstOrDefaultAsync(a => a.AssetCode == assetCode, ct);
 
     public Task<Asset?> GetByIdAsync(Guid id, CancellationToken ct) =>
         db.Assets.AsNoTracking().FirstOrDefaultAsync(a => a.Id == id, ct);

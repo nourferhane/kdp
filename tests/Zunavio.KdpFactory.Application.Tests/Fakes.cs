@@ -14,6 +14,9 @@ public sealed class FakeProjectRepository : IProjectRepository
     public Task<Project?> GetByCodeAsync(string projectCode, CancellationToken ct) =>
         Task.FromResult(Projects.FirstOrDefault(p => p.ProjectCode == projectCode));
 
+    public Task<Project?> GetTrackedByCodeAsync(string projectCode, CancellationToken ct) =>
+        GetByCodeAsync(projectCode, ct);
+
     public Task<IReadOnlyList<Project>> GetAllAsync(CancellationToken ct) =>
         Task.FromResult<IReadOnlyList<Project>>(Projects.ToList());
 
@@ -89,6 +92,8 @@ public sealed class FakeAssetRepository : IAssetRepository
     public Task<Asset?> GetLatestApprovedAsync(Guid projectId, AssetType type, CancellationToken ct) => throw new NotSupportedException();
     public Task<Asset?> GetLatestAsync(Guid projectId, AssetType type, CancellationToken ct) => throw new NotSupportedException();
     public Task<Asset?> GetByCodeAsync(string assetCode, CancellationToken ct) => throw new NotSupportedException();
+    public Task<Asset?> GetTrackedByCodeAsync(string assetCode, CancellationToken ct) =>
+        Task.FromResult(Assets.FirstOrDefault(a => a.AssetCode == assetCode));
     public Task<Asset?> GetByIdAsync(Guid id, CancellationToken ct) => throw new NotSupportedException();
 }
 

@@ -17,6 +17,7 @@ using Zunavio.KdpFactory.Infrastructure;
 using Zunavio.KdpFactory.Infrastructure.Configuration;
 using Zunavio.KdpFactory.Infrastructure.Health;
 using Zunavio.KdpFactory.Web.Mcp;
+using Zunavio.KdpFactory.Web.Api;
 
 var builder = WebApplication.CreateBuilder(args);
 var environment = builder.Environment;
@@ -141,6 +142,7 @@ builder.Services.AddMcpServer()
 
 // ---- REST API ----
 builder.Services.AddControllers();
+builder.Services.AddScoped<VerifiedImageUploadService>();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
