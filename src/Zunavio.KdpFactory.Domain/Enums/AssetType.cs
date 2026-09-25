@@ -15,4 +15,5 @@ public enum AssetType
     QaReport = 10,
     Metadata = 11,
     Illustration = 12,
+    OrchestratorReview = 13,
 }

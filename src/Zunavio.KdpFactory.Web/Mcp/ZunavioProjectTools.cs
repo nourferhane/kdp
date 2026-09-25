@@ -84,6 +84,7 @@ public sealed class ZunavioProjectTools(IControlCenterProjectImportService impor
             gate = project.CurrentGate.ToString(),
             status = project.Status.ToString(),
             nextAction = string.IsNullOrWhiteSpace(project.NextAction) ? null : project.NextAction,
+            qaResult = project.QaResult,
             marketScore = project.MarketScore,
             driveFolderUrl = project.DriveFolderUrl
         });

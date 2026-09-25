@@ -71,7 +71,7 @@ public static class ControlCenterLegacyMapper
             return ProjectStatus.Paused;
         }
 
-        if (normalized is "REJECTED" or "REJECT" or "CANCELLED")
+        if (normalized is "REJECTED" or "REJECT" or "CANCELLED" or "ARCHIVED")
         {
             return ProjectStatus.Rejected;
         }

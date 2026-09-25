@@ -30,7 +30,8 @@ ZUNAVIO KDP Factory (this app)
 The app's `/.well-known/oauth-protected-resource` advertises scopes
 `mcp:tools` and `mcp:tools:write` so a compliant client requests exactly
 those during the authorization step. `zunavio_import_project`,
-`zunavio_upload_image` and `zunavio_resume_visual_production` require the
+`zunavio_upload_image`, `zunavio_resume_visual_production`,
+`zunavio_record_scout_rejection` and `zunavio_finalize_scout_rejection` require the
 write scope; read tools use `mcp:tools` alone.
 
 ## Auth0 tenant setup (one-time, human in the dashboard)
@@ -94,6 +95,8 @@ AUTH0_AUDIENCE=https://your-tenant.us.auth0.com/api/v2/
    - `zunavio_import_project` (write)
    - `zunavio_upload_image` (write)
    - `zunavio_resume_visual_production` (write)
+   - `zunavio_record_scout_rejection` (write)
+   - `zunavio_finalize_scout_rejection` (write)
 3. Authorize the requested scopes in the Auth0 consent screen when prompted.
 
 ## Verify
@@ -136,6 +139,26 @@ The REST `POST /api/assets/upload` route uses the same verification service
 and still requires its API key. Deployment, OAuth write-scope grant, connector
 refresh and live end-to-end validation are separate operational steps. Never
 publish on KDP as part of this recovery.
+
+## Record an evidence-backed Scout rejection
+
+1. The project must be active at `MarketResearch` in PostgreSQL and
+   `MARKET_RESEARCH / ACTIVE` in the legacy Control Center. After a Validator
+   hold, both must show `VALIDATOR_HOLD / RUN_SCOUT_TARGETED_EVIDENCE`.
+2. Write and inspect the Scout decision as a real Google Doc in one of the
+   project's subfolders. Call `zunavio_record_scout_rejection` with its real
+   Drive file ID and version such as `v1.2`. The server checks the Drive file
+   and text, registers the evidence in PostgreSQL and verifies the updated
+   Control Center and PostgreSQL states. It sets
+   `SCOUT_REJECTION_RECOMMENDED / REVIEW_SCOUT_DECISION` without archiving.
+3. Produce a **separate** Orchestrator review document in a project subfolder.
+   If the review independently confirms rejection, include the exact decision
+   code `SCOUT_FAIL_UNPROVEN_DEMAND` and call
+   `zunavio_finalize_scout_rejection` with its own file ID. This operation
+   requires the earlier registered Scout evidence and archives the project;
+   it does not publish anything. A changed state or pending human review blocks
+   either operation. On a reconciliation error, inspect both systems before
+   retrying; never infer success from a Drive document alone.
 
 ## Troubleshooting
 
